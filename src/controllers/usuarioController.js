@@ -44,7 +44,8 @@ const login = async (req, res) => {
     if (!esCorrecto) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
-
+    // 👇 Actualiza el último login
+    await usuario.update({ ultimoLogin: new Date() });
     // Generar token
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, nombre: usuario.nombre },
