@@ -7,6 +7,9 @@ const Usuario = sequelize.define(
     nombre: {
       type: DataTypes.STRING,
       allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
     },
     correo: {
       type: DataTypes.STRING,
@@ -14,20 +17,37 @@ const Usuario = sequelize.define(
       unique: true,
       validate: {
         isEmail: true,
+        notEmpty: true,
       },
     },
     password: {
       type: DataTypes.STRING,
       allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
     },
     rol: {
-      type: DataTypes.ENUM("admin", "vendedor"), // ✅ Correcto
+      type: DataTypes.ENUM("admin", "vendedor"),
       defaultValue: "vendedor",
+    },
+    ultimoLogin: {
+      // 👈 Nuevo campo
+      type: DataTypes.DATE,
+      allowNull: true, // Permitir null inicialmente
+      defaultValue: null,
     },
   },
   {
-    tableName: "usuarios", // 👈 asegura que coincida con la base de datos
+    tableName: "usuarios",
     timestamps: false,
+    hooks: {
+      beforeCreate: (usuario) => {
+        if (!usuario.nombre || !usuario.correo || !usuario.password) {
+          throw new Error("Faltan datos obligatorios");
+        }
+      },
+    },
   }
 );
 
