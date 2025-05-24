@@ -3,7 +3,39 @@ const auditoriaProducto = require("../models/auditoriaProducto");
 
 const crearProducto = async (req, res) => {
   try {
-    const producto = await Producto.create(req.body); //creaccion del producto
+    // Validación de autenticación
+    if (!req.usuario || !req.usuario.id) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
+
+    const { nombre, descripcion, stock, precio, fecha_vencimiento } = req.body;
+
+    // Validaciones de campos obligatorios
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre es obligatorio" });
+    }
+    if (precio == null) {
+      return res.status(400).json({ error: "El precio es obligatorio" });
+    }
+    if (stock == null) {
+      return res.status(400).json({ error: "El stock es obligatorio" });
+    }
+    if (!fecha_vencimiento) {
+      return res
+        .status(400)
+        .json({ error: "La fecha de vencimiento es obligatoria" });
+    }
+
+    // Crear el producto
+    const producto = await Producto.create({
+      nombre,
+      descripcion,
+      stock,
+      precio,
+      fecha_vencimiento,
+    });
+
+    // Registrar en auditoría
     await auditoriaProducto.create({
       usuarioId: req.usuario.id,
       productoId: producto.id,
@@ -13,11 +45,15 @@ const crearProducto = async (req, res) => {
 
     res.status(201).json(producto);
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Error al crear el producto", detalle: error.message });
+    console.error("Error creando producto:", error);
+    res.status(500).json({
+      error: "Error al crear el producto",
+      detalle: error.message,
+    });
   }
 };
+
+module.exports = { crearProducto };
 
 //Obtener los productos todos
 
