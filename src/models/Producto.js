@@ -1,7 +1,7 @@
 // src/models/Producto.js
 
 const { DataTypes } = require("sequelize"); // Importamos los tipos de datos
-const sequelize = require("../config/db"); // Importamos la conexión
+const { sequelize } = require("../config/db"); // Importamos la conexión
 
 // Definimos el modelo "Producto"
 const Producto = sequelize.define(
@@ -29,6 +29,11 @@ const Producto = sequelize.define(
     eliminado: {
       type: DataTypes.BOOLEAN,
       defaultValue: false, // false = activo, true = eliminado
+    },
+    categoria: {
+      type: DataTypes.ENUM("fruta", "verdura", "lacteo", "carne", "otros"),
+      defaultValue: "otros",
+      allowNull: "false", // Categoría del producto
     },
   },
   {

@@ -3,12 +3,14 @@ const auditoriaProducto = require("../models/auditoriaProducto");
 
 const crearProducto = async (req, res) => {
   try {
+    categoriaPermitidas = ["fruta", "verdura", "lacteo", "carne", "otros"]; //categorias permitidas
     // Validación de autenticación
     if (!req.usuario || !req.usuario.id) {
       return res.status(401).json({ error: "No autorizado" });
     }
 
-    const { nombre, descripcion, stock, precio, fecha_vencimiento } = req.body;
+    const { nombre, descripcion, stock, precio, fecha_vencimiento, categoria } =
+      req.body;
 
     // Validaciones de campos obligatorios
     if (!nombre) {
@@ -25,7 +27,9 @@ const crearProducto = async (req, res) => {
         .status(400)
         .json({ error: "La fecha de vencimiento es obligatoria" });
     }
-
+    if (categoria && !categoriaPermitidas.includes(categoria)) {
+      return res.status(400).json({ error: "Categoría no válida" });
+    }
     // Crear el producto
     const producto = await Producto.create({
       nombre,
@@ -33,6 +37,7 @@ const crearProducto = async (req, res) => {
       stock,
       precio,
       fecha_vencimiento,
+      categoria,
     });
 
     // Registrar en auditoría
@@ -59,9 +64,12 @@ module.exports = { crearProducto };
 
 const obtenerProductos = async (req, res) => {
   try {
-    const productos = await Producto.findAll({
-      where: { eliminado: false }, // solo productos no eliminados
-    });
+    const { categoria } = req.query;
+    const where = { eliminado: false };
+
+    if (categoria) where.categoria = categoria;
+
+    const productos = await Producto.findAll({ where });
     res.json(productos);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener los productos" });

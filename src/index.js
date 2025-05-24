@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 require("dotenv").config();
-const sequelize = require("./config/db"); // Importamos la conexión con la base de datos
+const { sequelize } = require("./config/db"); // Importamos la conexión con la base de datos
 const Producto = require("./models/Producto");
 const productoRoutes = require("./routes/productoRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
