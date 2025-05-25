@@ -2,7 +2,7 @@
 
 const { DataTypes } = require("sequelize"); // Importamos los tipos de datos
 const sequelize = require("../config/db"); // Importamos la conexión
-
+const Categoria = require("./Categoria"); // Importamos el modelo de Categoria
 // Definimos el modelo "Producto"
 const Producto = sequelize.define(
   "Producto",

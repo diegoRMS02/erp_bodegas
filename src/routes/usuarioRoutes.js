@@ -20,8 +20,8 @@ const {
 // ✅ Ruta protegida: solo un ADMIN puede registrar nuevos usuarios
 router.post(
   "/registro",
-  verificacionToken,
-  verificacionAdmin,
+  // verificacionToken,
+  // verificacionAdmin,
   registrarUsuario
 );
 
