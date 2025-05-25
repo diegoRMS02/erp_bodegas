@@ -1,5 +1,5 @@
 const Categoria = require("../models/Categoria");
-
+const AuditoriaCategoria = require("../models/auditoriaCategoria");
 // Crear una nueva categoría
 const crearCategoria = async (req, res) => {
   try {
@@ -12,6 +12,16 @@ const crearCategoria = async (req, res) => {
 
     // Crear la categoría
     const nuevaCategoria = await Categoria.create({ nombre, descripcion });
+    // Registrar creacion
+    await AuditoriaCategoria.create({
+      usuarioId: req.usuario.id, // Asumiendo que tienes el usuario autenticado
+      categoriaId: nuevaCategoria.id,
+      accion: "Crear",
+      detalles: JSON.stringify({
+        nombre: nuevaCategoria.nombre,
+        descripcion: nuevaCategoria.descripcion,
+      }),
+    });
 
     return res.status(201).json(nuevaCategoria);
   } catch (error) {
@@ -46,27 +56,51 @@ const obtenerCategoriaPorId = async (req, res) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-// Actualizar una categoría
 const actualizarCategoria = async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, descripcion } = req.body;
+
+    // Buscar la categoría en la BD
     const categoria = await Categoria.findByPk(id);
     if (!categoria) {
       return res.status(404).json({ error: "Categoría no encontrada" });
     }
+
     // Validar que el nombre no esté vacío
     if (!nombre) {
       return res.status(400).json({ error: "El nombre es obligatorio" });
     }
-    // Actualizar la categoría
-    categoria.nombre = nombre;
-    categoria.descripcion = descripcion;
-    await categoria.save();
-    return res.status(200).json(categoria);
+
+    // Guardar valores anteriores para la auditoría
+    const datosAnteriores = {
+      nombre: categoria.nombre,
+      descripcion: categoria.descripcion,
+    };
+
+    // Actualizar los valores
+    await categoria.update({ nombre, descripcion });
+
+    // Registrar auditoría con los cambios antes y después
+    await AuditoriaCategoria.create({
+      usuarioId: req.usuario.id,
+      categoriaId: categoria.id,
+      accion: "Actualizar",
+      detalles: JSON.stringify({
+        antes: datosAnteriores,
+        despues: { nombre, descripcion },
+      }),
+    });
+
+    return res.status(200).json({
+      mensaje: "Categoría actualizada correctamente",
+      categoria,
+    });
   } catch (error) {
     console.error("Error al actualizar la categoría:", error);
-    return res.status(500).json({ error: "Error interno del servidor" });
+    return res
+      .status(500)
+      .json({ error: "Error interno del servidor", detalle: error.message });
   }
 };
 
@@ -81,6 +115,17 @@ const eliminarCategoria = async (req, res) => {
     }
 
     await categoria.update({ eliminado: true }); // Marcar como eliminada
+    // Registrar auditoría de eliminación
+    await AuditoriaCategoria.create({
+      usuarioId: req.usuario.id,
+      categoriaId: categoria.id,
+      accion: "Eliminar",
+      detalles: JSON.stringify({
+        nombre: categoria.nombre,
+        descripcion: categoria.descripcion,
+      }),
+    });
+
     res.status(200).json({ mensaje: "Categoría eliminada (soft delete)" });
   } catch (error) {
     console.error("Error al eliminar categoría:", error);
