@@ -8,13 +8,15 @@ const usuarioRoutes = require("./routes/usuarioRoutes");
 const Usuario = require("./models/Usuario");
 const auditoriaProducto = require("./models/auditoriaProducto");
 const auditoriaRoutes = require("./routes/auditoriaRoutes");
-
+const Categoria = require("./models/Categoria");
+const categoriasRoutes = require("./routes/categoriasRoutes");
 // Agrega después de app.use(express.json())
 app.use(express.json());
 
 app.use("/usuarios", usuarioRoutes);
 app.use("/productos", productoRoutes);
 app.use("/auditorias", auditoriaRoutes);
+app.use("/categorias", categoriasRoutes);
 
 sequelize
   .sync({ alter: true })
@@ -32,6 +34,14 @@ auditoriaProducto.belongsTo(Usuario, { foreignKey: "usuarioId" });
 Producto.hasMany(auditoriaProducto, { foreignKey: "productoId" });
 auditoriaProducto.belongsTo(Producto, { foreignKey: "productoId" });
 
+Producto.belongsTo(Categoria, {
+  foreignKey: "categoriaId", // Campo en la tabla Producto
+  targetKey: "id", // Campo en la tabla Categoria
+});
+Categoria.hasMany(Producto, {
+  foreignKey: "categoriaId",
+  as: "productos",
+});
 app.get("/", (req, res) => {
   res.send("¡ERP de la Bodega funcionando!");
 });

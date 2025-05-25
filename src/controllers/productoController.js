@@ -1,6 +1,6 @@
 const Producto = require("../models/Producto"); //importamos el modelo
 const auditoriaProducto = require("../models/auditoriaProducto");
-
+const Categoria = require("../models/Categoria"); // Importamos el modelo de Categoria
 const crearProducto = async (req, res) => {
   try {
     // Validación de autenticación
@@ -8,7 +8,14 @@ const crearProducto = async (req, res) => {
       return res.status(401).json({ error: "No autorizado" });
     }
 
-    const { nombre, descripcion, stock, precio, fecha_vencimiento } = req.body;
+    const {
+      nombre,
+      descripcion,
+      stock,
+      precio,
+      fecha_vencimiento,
+      categoriaId,
+    } = req.body;
 
     // Validaciones de campos obligatorios
     if (!nombre) {
@@ -25,14 +32,26 @@ const crearProducto = async (req, res) => {
         .status(400)
         .json({ error: "La fecha de vencimiento es obligatoria" });
     }
+    if (!categoriaId) {
+      return res.status(400).json({ error: "La categoría es obligatoria" });
+    }
 
-    // Crear el producto
+    // Verificar si la categoría existe antes de asignarla
+    const categoria = await Categoria.findByPk(categoriaId);
+    if (!categoria || categoria.eliminado) {
+      return res.status(400).json({
+        error: "La categoría especificada no existe o está eliminada",
+      });
+    }
+
+    // Crear el producto con categoríaId
     const producto = await Producto.create({
       nombre,
       descripcion,
       stock,
       precio,
       fecha_vencimiento,
+      categoriaId, // Ahora se asigna correctamente
     });
 
     // Registrar en auditoría

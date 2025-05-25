@@ -37,6 +37,7 @@ const Producto = sequelize.define(
     timestamps: false, //evita que cree campos createdAt y updatedAt si no los usas
   }
 );
+//Relaciones
 
 // Exportamos el modelo para usarlo en otras partes
 module.exports = Producto;

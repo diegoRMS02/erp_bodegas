@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const Producto = require("./Producto"); // Importamos el modelo de Producto
 const Categoria = sequelize.define(
   "categorias",
   {
@@ -19,11 +20,17 @@ const Categoria = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    eliminado: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false, // false = activo, true = eliminado
+    },
   },
   {
     tableName: "categorias",
     timestamps: false,
   }
 );
+
+// Relaciones
 
 module.exports = Categoria;
