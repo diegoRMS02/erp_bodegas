@@ -1,6 +1,8 @@
 const Producto = require("../models/Producto"); //importamos el modelo
 const auditoriaProducto = require("../models/auditoriaProducto");
 const Categoria = require("../models/Categoria"); // Importamos el modelo de Categoria
+const { Op } = require("sequelize"); // Importamos Sequelize para usar operadores
+
 const crearProducto = async (req, res) => {
   try {
     // Validación de autenticación
@@ -72,8 +74,6 @@ const crearProducto = async (req, res) => {
   }
 };
 
-module.exports = { crearProducto };
-
 //Obtener los productos todos
 
 const obtenerProductos = async (req, res) => {
@@ -83,6 +83,7 @@ const obtenerProductos = async (req, res) => {
     });
     res.json(productos);
   } catch (error) {
+    console.error("Error al obtener productos:", error);
     res.status(500).json({ error: "Error al obtener los productos" });
   }
 };
@@ -109,6 +110,7 @@ const obtenerProductoPorId = async (req, res) => {
       res.json(producto);
     }
   } catch (error) {
+    console.error("Error al obtener producto por ID:", error);
     res.status(500).json({ error: "Error al obtener el producto" });
   }
 };
@@ -177,6 +179,38 @@ const eliminarProducto = async (req, res) => {
   }
 };
 
+const buscarProductoPorNombre = async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    if (!search) {
+      return res
+        .status(400)
+        .json({ error: "Debe proporcionar un nombre o código de producto" });
+    }
+
+    const productos = await Producto.findAll({
+      where: {
+        nombre: { [Op.iLike]: `%${search}%` }, // Búsqueda insensible a mayúsculas/minúsculas
+        stock: { [Op.gt]: 0 },
+      },
+      attributes: ["id", "nombre", "precio", "stock"],
+      order: [["nombre", "ASC"]],
+    });
+
+    if (productos.length === 0) {
+      return res.json({ mensaje: "No se encontraron productos disponibles" });
+    }
+
+    res.json(productos);
+  } catch (error) {
+    console.error("Error en la búsqueda de productos:", error);
+    res
+      .status(500)
+      .json({ error: "Error interno en la búsqueda de productos" });
+  }
+};
+
 // exportamos los modelos
 
 module.exports = {
@@ -185,4 +219,5 @@ module.exports = {
   crearProducto,
   actualizarProducto,
   eliminarProducto,
+  buscarProductoPorNombre,
 };

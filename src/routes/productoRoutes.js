@@ -12,10 +12,12 @@ const {
   obtenerProductoPorId,
   actualizarProducto,
   eliminarProducto,
+  buscarProductoPorNombre,
 } = require("../controllers/productoController");
 
 // Solo usuarios autenticados pueden ver productos
 router.get("/", verificacionToken, obtenerProductos);
+router.get("/buscar", verificacionToken, buscarProductoPorNombre);
 router.get("/:id", verificacionToken, obtenerProductoPorId);
 
 // Solo administradores pueden crear, actualizar y eliminar
