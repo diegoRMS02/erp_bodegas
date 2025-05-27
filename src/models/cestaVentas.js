@@ -34,7 +34,7 @@ const CestaVentas = sequelize.define(
       defaultValue: 1, // Valor por defecto para la cantidad
     },
     estado: {
-      type: DataTypes.ENUM("pendiente", "eliminado", "procesado"),
+      type: DataTypes.ENUM("pendiente", "eliminado", "cancelado", "procesado"),
       allowNull: false,
       defaultValue: "pendiente", // Valor por defecto para el estado
     },

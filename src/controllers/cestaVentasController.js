@@ -161,8 +161,59 @@ const eliminarProductoDeCesta = async (req, res) => {
   }
 };
 
+//cancelar cesta
+const cancelarCesta = async (req, res) => {
+  try {
+    const { usuarioId, cestaId } = req.params;
+
+    const cestaExistente = await CestaVenta.findOne({
+      where: { usuarioId, cestaId, estado: "pendiente" },
+    });
+
+    if (!cestaExistente) {
+      return res
+        .status(404)
+        .json({ error: "La cesta no existe o ya fue cancelada" });
+    }
+
+    await CestaVenta.update(
+      { estado: "cancelado" },
+      { where: { usuarioId, cestaId } }
+    );
+
+    res.json({ mensaje: `Cesta ${cestaId} cancelada correctamente` });
+  } catch (error) {
+    console.error("Error al cancelar cesta:", error);
+    res.status(500).json({ error: "Error interno al cancelar la cesta" });
+  }
+};
+
+//eliminar cesta
+const eliminarCesta = async (req, res) => {
+  try {
+    const { usuarioId, cestaId } = req.params;
+
+    const cestaExistente = await CestaVenta.findOne({
+      where: { usuarioId, cestaId },
+    });
+
+    if (!cestaExistente) {
+      return res.status(404).json({ error: "La cesta no existe" });
+    }
+
+    await CestaVenta.destroy({ where: { usuarioId, cestaId } });
+
+    res.json({ mensaje: `Cesta ${cestaId} eliminada completamente` });
+  } catch (error) {
+    console.error("Error al eliminar cesta:", error);
+    res.status(500).json({ error: "Error interno al eliminar la cesta" });
+  }
+};
+
 module.exports = {
   agregarACesta,
   obtenerCestaPorUsuario,
   eliminarProductoDeCesta,
+  cancelarCesta,
+  eliminarCesta,
 };
