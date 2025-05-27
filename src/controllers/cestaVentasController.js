@@ -53,4 +53,36 @@ const agregarACesta = async (req, res) => {
   }
 };
 
-module.exports = { agregarACesta };
+const obtenerCestaPorUsuario = async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+    if (!usuarioId) {
+      return res
+        .status(400)
+        .json({ error: "Debe proporcionar un ID de usuario" });
+    }
+    const productosCesta = await CestaVenta.findAll({
+      where: { usuarioId },
+      include: [
+        {
+          model: Producto,
+          as: "Producto",
+          attributes: ["id", "nombre", "precio", "stock"],
+        },
+      ],
+    });
+    if (productosCesta.length === 0) {
+      return res
+        .status(404)
+        .json({ mensaje: "Cesta vacía o usuario no encontrado" });
+    }
+    res.status(200).json(productosCesta);
+  } catch (error) {
+    console.error("Error al obtener la cesta del usuario:", error);
+    res
+      .status(500)
+      .json({ error: "Error interno al obtener la cesta del usuario" });
+  }
+};
+
+module.exports = { agregarACesta, obtenerCestaPorUsuario };
