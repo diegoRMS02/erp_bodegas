@@ -127,33 +127,32 @@ const obtenerCestaPorUsuario = async (req, res) => {
 
 const eliminarProductoDeCesta = async (req, res) => {
   try {
-    const { usuarioId, productoId } = req.params;
+    const { usuarioId, cestaId, productoId } = req.params;
 
-    // Validación de datos
-    if (!usuarioId || !productoId) {
+    if (!usuarioId || !cestaId || !productoId) {
       return res
         .status(400)
-        .json({ error: "Debe proporcionar usuario y producto" });
+        .json({ error: "Debe proporcionar usuario, cesta y producto válidos" });
     }
 
-    // Buscar el producto en la cesta
-    const productoCesta = await CestaVenta.findOne({
-      where: { usuarioId, productoId },
+    const productoEnCesta = await CestaVenta.findOne({
+      where: { usuarioId, cestaId, productoId, estado: "pendiente" },
     });
 
-    if (!productoCesta) {
+    if (!productoEnCesta) {
       return res
         .status(404)
-        .json({ error: "Producto no encontrado en la cesta" });
+        .json({ error: "El producto no está en la cesta o ya fue eliminado" });
     }
 
-    // Cambiar el estado a 'eliminado' en lugar de borrarlo
     await CestaVenta.update(
       { estado: "eliminado" },
-      { where: { usuarioId, productoId } }
+      { where: { usuarioId, cestaId, productoId } }
     );
 
-    res.json({ mensaje: "Producto marcado como eliminado en la cesta" });
+    res.json({
+      mensaje: `Producto eliminado correctamente de la cesta ${cestaId}`,
+    });
   } catch (error) {
     console.error("Error al eliminar producto de la cesta:", error);
     res
@@ -161,6 +160,7 @@ const eliminarProductoDeCesta = async (req, res) => {
       .json({ error: "Error interno al eliminar producto de la cesta" });
   }
 };
+
 module.exports = {
   agregarACesta,
   obtenerCestaPorUsuario,

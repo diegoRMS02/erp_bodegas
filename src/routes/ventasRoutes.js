@@ -14,7 +14,7 @@ const {
 router.get("/cesta/:usuarioId/", verificacionToken, obtenerCestaPorUsuario);
 router.post("/cesta", verificacionToken, verificacionAdmin, agregarACesta);
 router.delete(
-  "/cesta/:usuarioId/:productoId",
+  "/cesta/:usuarioId/:cestaId/:productoId",
   verificacionToken,
   verificacionAdmin,
   eliminarProductoDeCesta
