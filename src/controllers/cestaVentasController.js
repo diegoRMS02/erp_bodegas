@@ -14,6 +14,14 @@ const agregarACesta = async (req, res) => {
 
     let productosAgregados = [];
 
+    // Obtener el último `cestaId` del usuario o generar uno nuevo
+    let ultimaCesta = await CestaVenta.findOne({
+      where: { usuarioId },
+      order: [["createdAt", "DESC"]],
+    });
+
+    const nuevaCestaId = ultimaCesta ? ultimaCesta.cestaId + 1 : 1;
+
     for (let item of productos) {
       const { productoId, cantidad } = item;
 
@@ -32,18 +40,22 @@ const agregarACesta = async (req, res) => {
           .json({ error: `Stock insuficiente para ${producto.nombre}` });
       }
 
-      // Agregar producto a la cesta
+      // Agregar producto a la cesta con un `cestaId` único
       const productoCesta = await CestaVenta.create({
+        cestaId: nuevaCestaId,
         usuarioId,
         productoId,
         cantidad,
+        estado: "pendiente",
       });
+
       productosAgregados.push(productoCesta);
     }
 
     res.status(201).json({
-      mensaje: "Productos agregados a la cesta correctamente",
-      cesta: productosAgregados,
+      mensaje: `Productos agregados a la cesta ${nuevaCestaId} correctamente`,
+      cestaId: nuevaCestaId,
+      productos: productosAgregados,
     });
   } catch (error) {
     console.error("Error al agregar productos a la cesta:", error);
@@ -61,8 +73,11 @@ const obtenerCestaPorUsuario = async (req, res) => {
         .status(400)
         .json({ error: "Debe proporcionar un ID de usuario" });
     }
+
+    // Obtener productos en la cesta organizados por `cestaId`
     const productosCesta = await CestaVenta.findAll({
-      where: { usuarioId },
+      where: { usuarioId, estado: "pendiente" },
+      attributes: ["cestaId", "productoId", "cantidad"],
       include: [
         {
           model: Producto,
@@ -70,13 +85,38 @@ const obtenerCestaPorUsuario = async (req, res) => {
           attributes: ["id", "nombre", "precio", "stock"],
         },
       ],
+      order: [["cestaId", "DESC"]], // Mostrar primero las cestas más recientes
     });
+
     if (productosCesta.length === 0) {
       return res
         .status(404)
         .json({ mensaje: "Cesta vacía o usuario no encontrado" });
     }
-    res.status(200).json(productosCesta);
+
+    // Agrupar productos por `cestaId`
+    const cestasAgrupadas = productosCesta.reduce((acc, item) => {
+      const { cestaId, productoId, cantidad, Producto } = item;
+
+      if (!acc[cestaId]) {
+        acc[cestaId] = { cestaId, productos: [] };
+      }
+
+      acc[cestaId].productos.push({
+        productoId,
+        nombre: Producto.nombre,
+        precio: Producto.precio,
+        cantidad,
+        stock: Producto.stock,
+      });
+
+      return acc;
+    }, {});
+
+    // Convertir objeto agrupado en array
+    const respuestaFinal = Object.values(cestasAgrupadas);
+
+    res.status(200).json(respuestaFinal);
   } catch (error) {
     console.error("Error al obtener la cesta del usuario:", error);
     res

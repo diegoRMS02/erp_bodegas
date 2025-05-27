@@ -7,6 +7,11 @@ const Producto = require("./Producto"); // Importamos el modelo Producto
 const CestaVentas = sequelize.define(
   "CestaVentas",
   {
+    cestaId: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true, // Auto-incrementa el ID de la cesta
+    },
     usuarioId: {
       type: DataTypes.INTEGER,
       allowNull: false,
