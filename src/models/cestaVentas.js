@@ -28,6 +28,11 @@ const CestaVentas = sequelize.define(
       allowNull: false,
       defaultValue: 1, // Valor por defecto para la cantidad
     },
+    estado: {
+      type: DataTypes.ENUM("pendiente", "eliminado", "procesado"),
+      allowNull: false,
+      defaultValue: "pendiente", // Valor por defecto para el estado
+    },
   },
   {
     timestamps: true, // Agrega createdAt y updatedAt

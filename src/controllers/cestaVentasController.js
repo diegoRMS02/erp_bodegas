@@ -85,4 +85,44 @@ const obtenerCestaPorUsuario = async (req, res) => {
   }
 };
 
-module.exports = { agregarACesta, obtenerCestaPorUsuario };
+const eliminarProductoDeCesta = async (req, res) => {
+  try {
+    const { usuarioId, productoId } = req.params;
+
+    // Validación de datos
+    if (!usuarioId || !productoId) {
+      return res
+        .status(400)
+        .json({ error: "Debe proporcionar usuario y producto" });
+    }
+
+    // Buscar el producto en la cesta
+    const productoCesta = await CestaVenta.findOne({
+      where: { usuarioId, productoId },
+    });
+
+    if (!productoCesta) {
+      return res
+        .status(404)
+        .json({ error: "Producto no encontrado en la cesta" });
+    }
+
+    // Cambiar el estado a 'eliminado' en lugar de borrarlo
+    await CestaVenta.update(
+      { estado: "eliminado" },
+      { where: { usuarioId, productoId } }
+    );
+
+    res.json({ mensaje: "Producto marcado como eliminado en la cesta" });
+  } catch (error) {
+    console.error("Error al eliminar producto de la cesta:", error);
+    res
+      .status(500)
+      .json({ error: "Error interno al eliminar producto de la cesta" });
+  }
+};
+module.exports = {
+  agregarACesta,
+  obtenerCestaPorUsuario,
+  eliminarProductoDeCesta,
+};

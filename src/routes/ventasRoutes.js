@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   agregarACesta,
   obtenerCestaPorUsuario,
+  eliminarProductoDeCesta,
 } = require("../controllers/cestaVentasController");
 const {
   verificacionToken,
@@ -10,7 +11,12 @@ const {
 } = require("../middleware/authMiddleware");
 
 // Ruta para obtener la cesta de un usuario específico
-router.get("/cesta/:usuarioId", verificacionToken, obtenerCestaPorUsuario);
+router.get("/cesta/:usuarioId/", verificacionToken, obtenerCestaPorUsuario);
 router.post("/cesta", verificacionToken, verificacionAdmin, agregarACesta);
-
+router.delete(
+  "/cesta/:usuarioId/:productoId",
+  verificacionToken,
+  verificacionAdmin,
+  eliminarProductoDeCesta
+);
 module.exports = router;
