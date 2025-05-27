@@ -12,9 +12,15 @@ const {
   verificacionAdmin,
 } = require("../middleware/authMiddleware");
 
+const { confirmarVenta } = require("../controllers/ventasController");
+
 // Ruta para obtener la cesta de un usuario específico
 router.get("/cesta/:usuarioId/", verificacionToken, obtenerCestaPorUsuario);
 router.post("/cesta", verificacionToken, verificacionAdmin, agregarACesta);
+
+//ventas
+router.post("/confirmar", verificacionToken, confirmarVenta);
+
 //eliminar producto de la cesta
 router.delete(
   "/cesta/:usuarioId/:cestaId/:productoId",
