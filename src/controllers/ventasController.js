@@ -1,95 +1,115 @@
-const { Op } = require("sequelize");
 const Venta = require("../models/Venta");
 const CestaVentas = require("../models/cestaVentas");
 const Producto = require("../models/Producto");
+const PromocionesDescuentos = require("../models/promocionesDescuentos");
+const VentasDescuentos = require("../models/ventasDescuentos");
+
+const { Op } = require("sequelize");
 
 const confirmarVenta = async (req, res) => {
   try {
-    const { usuarioId, cestaId } = req.body;
+    const { usuarioId, cestaId, codigo_promocional } = req.body;
 
-    // Validación de datos: asegurar que usuarioId y cestaId sean valores numéricos válidos
+    // Validar datos de entrada
     if (!usuarioId || !cestaId || isNaN(usuarioId) || isNaN(cestaId)) {
       return res
         .status(400)
         .json({ error: "Debe proporcionar usuarioId y cestaId válidos." });
     }
 
-    // Verificar si la cesta existe y pertenece al usuario
-    const cesta = await CestaVentas.findOne({
-      where: { cestaId, usuarioId, estado: "pendiente" },
-      include: [
-        {
-          model: Producto,
-          as: "Producto",
-          attributes: ["id", "nombre", "precio"],
-        },
-      ],
-    });
-
-    if (!cesta) {
-      return res
-        .status(404)
-        .json({ error: "Cesta no encontrada o ya fue procesada/cancelada." });
-    }
-
-    // Obtener productos dentro de la cesta
+    // Obtener productos en la cesta
     const productosCesta = await CestaVentas.findAll({
       where: { cestaId, usuarioId, estado: "pendiente" },
       include: [
         {
           model: Producto,
           as: "Producto",
-          attributes: ["id", "nombre", "precio"],
+          attributes: ["id", "nombre", "precio", "categoriaId"],
         },
       ],
     });
 
     if (productosCesta.length === 0) {
-      return res.status(400).json({
-        error: "La cesta no tiene productos activos para confirmar la venta.",
-      });
-    }
-
-    // Calcular el total de la venta
-    let subtotal = 0;
-    let detallesVenta = [];
-
-    for (const item of productosCesta) {
-      if (!item.Producto || !item.Producto.precio || !item.cantidad) {
-        return res.status(400).json({
-          error: `Error con los datos del producto ID: ${item.productoId}`,
+      return res
+        .status(400)
+        .json({
+          error: "La cesta no tiene productos activos para confirmar la venta.",
         });
-      }
-
-      subtotal += item.Producto.precio * item.cantidad;
-      detallesVenta.push({
-        producto: item.Producto.nombre,
-        cantidad: item.cantidad,
-        precioUnitario: item.Producto.precio,
-      });
     }
 
-    // Aplicar IGV (18% impuesto en Perú)
-    const IGV = 0.18;
-    const totalConImpuestos = subtotal + subtotal * IGV;
+    // Registrar la venta antes de aplicar descuentos
+    let subtotal = 0;
+    let detallesDescuentos = [];
 
-    // Crear la venta en la base de datos
     const nuevaVenta = await Venta.create({
       usuarioId,
       cestaId,
-      total: totalConImpuestos,
+      total: subtotal,
     });
 
-    // Actualizar el estado de la cesta a 'procesado'
-    await CestaVentas.update(
-      { estado: "procesado" },
-      { where: { cestaId, usuarioId } }
-    );
+    for (const item of productosCesta) {
+      let precio_final = item.Producto.precio;
+      let descuentoAplicado = 0;
+      let promocionUsada = null;
+
+      // Buscar promociones activas
+      const promocion = await PromocionesDescuentos.findOne({
+        where: {
+          estado: "activo",
+          fecha_inicio: { [Op.lte]: new Date() },
+          fecha_fin: { [Op.gte]: new Date() },
+          [Op.or]: [
+            { productoId: item.Producto.id },
+            { categoriaId: item.Producto.categoriaId },
+          ],
+        },
+      });
+
+      if (promocion) {
+        if (promocion.tipo === "porcentaje") {
+          descuentoAplicado = precio_final * (promocion.valor_descuento / 100);
+        } else if (promocion.tipo === "cantidad_fija") {
+          descuentoAplicado = promocion.valor_descuento;
+        }
+
+        precio_final -= descuentoAplicado;
+
+        await VentasDescuentos.create({
+          ventaId: nuevaVenta.id,
+          promocionId: promocion.id,
+          tipo: promocion.tipo,
+          valor_descuento: promocion.valor_descuento,
+          precio_final,
+        });
+
+        promocionUsada = {
+          producto: item.Producto.nombre,
+          promocion: promocion.nombre_promocion,
+          tipo: promocion.tipo,
+          valor: promocion.valor_descuento,
+          descuentoAplicado,
+          precioFinal: precio_final,
+        };
+
+        detallesDescuentos.push(promocionUsada);
+      }
+
+      subtotal += precio_final * item.cantidad;
+    }
+
+    // Calcular IGV (18%)
+    const IGV = subtotal * 0.18;
+    const totalConImpuestos = subtotal + IGV;
+
+    // Actualizar el total de la venta después de aplicar descuentos e impuestos
+    await nuevaVenta.update({ total: totalConImpuestos });
 
     res.status(201).json({
-      mensaje: "Venta confirmada correctamente",
+      mensaje: "Venta confirmada correctamente con descuentos aplicados",
       ventaId: nuevaVenta.id,
-      detallesVenta,
+      subtotal,
+      descuentos: detallesDescuentos,
+      IGV,
       totalFinal: totalConImpuestos,
     });
   } catch (error) {
