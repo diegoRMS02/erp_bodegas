@@ -13,6 +13,7 @@ const categoriasRoutes = require("./routes/categoriasRoutes");
 const auditoriaCategoriaRoutes = require("./routes/auditoriaCategoriaRoutes");
 const ventasRoutes = require("./routes/ventasRoutes");
 const promocionesRoutes = require("./routes/promocionesRoutes");
+const comprobantesRoutes = require("./routes/comprobantesRoutes");
 // Agrega después de app.use(express.json())
 app.use(express.json());
 
@@ -23,6 +24,7 @@ app.use("/categorias", categoriasRoutes);
 app.use("/auditoria-categorias", auditoriaCategoriaRoutes);
 app.use("/ventas", ventasRoutes);
 app.use("/promociones", promocionesRoutes);
+app.use("/comprobantes", comprobantesRoutes);
 
 sequelize
   .sync({ alter: true })
