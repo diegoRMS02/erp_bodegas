@@ -84,6 +84,11 @@ const ComprobantesPago = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: false,
     },
+    detalle: {
+      type: DataTypes.JSON, // 🔹 Permitir almacenamiento de datos estructurados
+      allowNull: false,
+      defaultValue: [], // Lista de productos o servicios incluidos en el comprobante
+    },
 
     // 🔹 Autenticidad y validación ante SUNAT
     codigo_hash: {

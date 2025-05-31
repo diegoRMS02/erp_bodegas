@@ -101,9 +101,11 @@ sequelize
   .authenticate()
   .then(async () => {
     console.log("✅ Conexión exitosa a la base de datos");
-    await sequelize.sync();
+    await sequelize.sync({ alter: true }); // Sincronizar modelos con la base de datos
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+      console.log(
+        `🚀 Servidor corriendo en http://localhost:${PORT} sincronizado con alter`
+      );
     });
   })
   .catch((error) => {

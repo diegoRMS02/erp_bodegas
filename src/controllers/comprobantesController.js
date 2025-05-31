@@ -24,15 +24,17 @@ const crearComprobante = async (req, res) => {
       subtotal,
       IGV,
       total_final,
-      detalle,
-    } = req.body; // Extraemos los datos enviados por el usuario
+      detalle, // 🔹 Lista de productos
+    } = req.body;
 
     // 🔹 Validación: Verificamos que los datos esenciales no estén vacíos
-    if (!serie || !numero || !emisor_ruc || !total_final) {
+    if (!serie || !numero || !emisor_ruc || !total_final || !detalle) {
       return res
         .status(400)
         .json({ error: "Faltan datos esenciales del comprobante." });
     }
+
+    // 🔹 Verificamos si ya existe un comprobante con la misma serie y número
     const comprobanteExistente = await ComprobantesPago.findOne({
       where: { serie, numero },
     });
@@ -44,11 +46,19 @@ const crearComprobante = async (req, res) => {
         });
     }
 
+    // 🔹 Asegurar que `detalle` sea JSON válido antes de guardarlo
+    let detalleProductos;
+    try {
+      detalleProductos = JSON.parse(detalle); // Si viene como string, convertirlo
+    } catch (error) {
+      detalleProductos = detalle; // Si ya es un array, lo dejamos tal cual
+    }
+
     // 🔹 Creamos el objeto comprobante con los datos recibidos
     const comprobante = {
       serie,
       numero,
-      fecha_emision: fecha_emision || new Date(), // Si no se envía la fecha, se usa la actual
+      fecha_emision: fecha_emision || new Date(), // Si no se envía fecha, se usa la actual
       tipo,
       emisor_ruc,
       emisor_razon_social,
@@ -61,7 +71,7 @@ const crearComprobante = async (req, res) => {
       subtotal,
       IGV,
       total_final,
-      detalle,
+      detalle: detalleProductos, // 🔹 Guardamos `detalle` como JSON
       codigo_hash: generarCodigoHash({
         emisor_ruc,
         serie,
