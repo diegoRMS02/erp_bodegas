@@ -15,9 +15,14 @@
     "bodega_erp": "file:",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-handlebars": "^8.0.3",
+    "fs": "^0.0.1-security",
+    "handlebars": "^4.7.8",
     "jsonwebtoken": "^9.0.2",
+    "path": "^0.12.7",
     "pg": "^8.16.0",
     "pg-hstore": "^2.3.4",
+    "puppeteer": "^24.9.0",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {

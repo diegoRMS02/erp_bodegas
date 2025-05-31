@@ -1,0 +1,97 @@
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Comprobante {{tipo}}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; } .container {
+      width: 700px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; }
+      .header { display: flex; justify-content: space-between; align-items:
+      center; margin-bottom: 20px; } .logo { width: 75; } .company-info,
+      .client-info, .comprobante-info { font-size: 12px; } .factura-box { width:
+      200px; text-align: center; padding: 10px; border: 1px solid #000; }
+      .factura-box p { margin: 5px 0; font-weight: bold; } .info-section {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; } .table { width: 100%; border-collapse: collapse;
+      margin-bottom: 20px; } .table th, .table td { border: 1px solid #ddd;
+      padding: 8px; text-align: left; } .totals { text-align: right;
+      font-weight: bold; margin-top: 10px; } .footer { text-align: center;
+      font-size: 10px; margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Encabezado -->
+      <div class="header">
+        <div class="header-left">
+          <img class="logo" src="{{logo_empresa}}" alt="Logo Empresa" />
+          <div class="company-info">
+            <p><strong>{{emisor_razon_social}}</strong></p>
+            <p>Dirección: {{emisor_direccion}}</p>
+            <p>Teléfono: {{emisor_telefono}}</p>
+          </div>
+
+        </div>
+        <div class="factura-box">
+          <p>RUC: {{emisor_ruc}}</p>
+          <p>{{tipo}}</p>
+          <p>Serie: {{serie}} - Nº {{numero}}</p>
+        </div>
+      </div>
+
+      <!-- Información de la empresa debajo del logo -->
+
+      <!-- Información del cliente y comprobante alineados en una misma fila -->
+      <div class="info-section">
+        <div class="client-info">
+          <p><strong>Cliente:</strong> {{cliente_nombre}}</p>
+          <p><strong>Documento:</strong> {{cliente_dni_ruc}}</p>
+        </div>
+        <div class="comprobante-info">
+          <p><strong>Fecha de emisión:</strong> {{fecha_emision}}</p>
+          <p><strong>Fecha de vencimiento:</strong> {{fecha_vencimiento}}</p>
+          <p><strong>Moneda:</strong> {{moneda}}</p>
+        </div>
+      </div>
+
+      <!-- Detalles de productos -->
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>Precio Unitario</th>
+            <th>Subtotal</th>
+            <th>IGV</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each detalle}}
+            <tr>
+              <td>{{descripcion}}</td>
+              <td>{{cantidad}}</td>
+              <td>S/ {{precio_unitario}}</td>
+              <td>S/ {{subtotal}}</td>
+              <td>S/ {{igv_item}}</td>
+              <td>S/ {{total_item}}</td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+
+      <!-- Totales -->
+      <div class="totals">
+        <p>Subtotal: S/ {{subtotal}}</p>
+        <p>IGV: S/ {{IGV}}</p>
+        <p><strong>Total Final: S/ {{total_final}}</strong></p>
+      </div>
+
+      <!-- Pie de página -->
+      <div class="footer">
+        <p>Este comprobante ha sido generado electrónicamente y tiene validez
+          legal.</p>
+        <p>Gracias por su compra.</p>
+      </div>
+    </div>
+  </body>
+</html>
