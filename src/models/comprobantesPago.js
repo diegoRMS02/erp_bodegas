@@ -99,7 +99,7 @@ const ComprobantesPago = sequelize.define(
       type: DataTypes.ENUM(
         "pendiente",
         "aceptado",
-        "rechazado",
+        "observado",
         "enviado",
         "rechazado",
         "anulado"
