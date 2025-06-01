@@ -2,7 +2,6 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 
 const Usuario = require("./Usuario"); // Importamos el modelo Usuario
-const Producto = require("./Producto"); // Importamos el modelo Producto
 
 const CestaVentas = sequelize.define(
   "CestaVentas",
@@ -10,43 +9,28 @@ const CestaVentas = sequelize.define(
     cestaId: {
       type: DataTypes.INTEGER,
       primaryKey: true,
-      autoIncrement: true, // Auto-incrementa el ID de la cesta
+      autoIncrement: true,
     },
     usuarioId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: Usuario,
-        key: "id",
-      },
+      references: { model: Usuario, key: "id" },
     },
-    productoId: {
-      type: DataTypes.INTEGER,
+    productos: {
+      type: DataTypes.JSON, // 🔹 Nuevo campo para almacenar productos como JSON
       allowNull: false,
-      references: {
-        model: Producto,
-        key: "id",
-      },
-    },
-    cantidad: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 1, // Valor por defecto para la cantidad
+      defaultValue: [], // 🔹 Cada producto tendrá `productoId`, `nombre`, `precio`, `cantidad`
     },
     estado: {
       type: DataTypes.ENUM("pendiente", "eliminado", "cancelado", "procesado"),
       allowNull: false,
-      defaultValue: "pendiente", // Valor por defecto para el estado
+      defaultValue: "pendiente",
     },
   },
-  {
-    timestamps: true, // Agrega createdAt y updatedAt
-  }
+  { timestamps: true }
 );
 
-//relaciones
+// 🔹 Relación con Usuario (cada usuario tiene su propia cesta)
 CestaVentas.belongsTo(Usuario, { foreignKey: "usuarioId", as: "Usuario" });
-CestaVentas.belongsTo(Producto, { foreignKey: "productoId", as: "Producto" });
 
-// Exportamos el modelo
 module.exports = CestaVentas;

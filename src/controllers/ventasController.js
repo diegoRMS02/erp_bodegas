@@ -3,33 +3,25 @@ const CestaVentas = require("../models/cestaVentas");
 const Producto = require("../models/Producto");
 const PromocionesDescuentos = require("../models/promocionesDescuentos");
 const VentasDescuentos = require("../models/ventasDescuentos");
-
 const { Op } = require("sequelize");
 
 const confirmarVenta = async (req, res) => {
   try {
     const { usuarioId, cestaId, codigo_promocional } = req.body;
 
-    // 🔍 **Validar datos de entrada antes de procesar la venta**
+    // 🔍 **Validar datos de entrada**
     if (!usuarioId || !cestaId || isNaN(usuarioId) || isNaN(cestaId)) {
       return res
         .status(400)
         .json({ error: "Debe proporcionar usuarioId y cestaId válidos." });
     }
 
-    // 🔄 **Obtener productos en la cesta para validación**
-    const productosCesta = await CestaVentas.findAll({
+    // 🔄 **Obtener la cesta con productos almacenados en JSON**
+    const cesta = await CestaVentas.findOne({
       where: { cestaId, usuarioId, estado: "pendiente" },
-      include: [
-        {
-          model: Producto,
-          as: "Producto",
-          attributes: ["id", "nombre", "precio", "categoriaId", "stock"],
-        },
-      ],
     });
 
-    if (productosCesta.length === 0) {
+    if (!cesta || cesta.productos.length === 0) {
       return res
         .status(400)
         .json({
@@ -37,42 +29,48 @@ const confirmarVenta = async (req, res) => {
         });
     }
 
-    // 🔍 **Verificar stock antes de confirmar la venta**
-    for (const item of productosCesta) {
-      if (item.Producto.stock < item.cantidad) {
-        return res.status(400).json({
-          error: `Stock insuficiente para el producto: ${item.Producto.nombre}. Disponible: ${item.Producto.stock}, solicitado: ${item.cantidad}`,
-        });
-      }
-    }
-
-    // 🔄 **Registrar la venta antes de aplicar descuentos**
     let subtotal = 0;
     let detallesDescuentos = [];
 
+    // 🔄 **Registrar la venta antes de aplicar descuentos**
     const nuevaVenta = await Venta.create({
       usuarioId,
       cestaId,
-      total: subtotal,
+      total: subtotal, // Se actualizará más adelante
+      fecha: new Date(),
     });
 
     // 🔧 **Aplicar descuentos y actualizar stock**
-    for (const item of productosCesta) {
-      let precio_final = item.Producto.precio;
+    for (const producto of cesta.productos) {
+      const stockDisponible = await Producto.findByPk(producto.productoId);
+      if (!stockDisponible || isNaN(producto.cantidad)) {
+        return res.status(400).json({
+          error: `Stock insuficiente o cantidad inválida para el producto: ${
+            producto.nombre
+          }. Disponible: ${
+            stockDisponible ? stockDisponible.stock : 0
+          }, solicitado: ${producto.cantidad}`,
+        });
+      }
+
+      let precio_final = producto.precio;
       let descuentoAplicado = 0;
       let promocionUsada = null;
 
-      // 🔍 **Buscar promociones activas para el producto**
+      // 🔍 **Verificar si `categoriaId` existe antes de buscar promociones**
+      const filtroPromocion = {
+        estado: "activo",
+        fecha_inicio: { [Op.lte]: new Date() },
+        fecha_fin: { [Op.gte]: new Date() },
+      };
+
+      if (producto.productoId)
+        filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
+      if (producto.categoriaId)
+        filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
+
       const promocion = await PromocionesDescuentos.findOne({
-        where: {
-          estado: "activo",
-          fecha_inicio: { [Op.lte]: new Date() },
-          fecha_fin: { [Op.gte]: new Date() },
-          [Op.or]: [
-            { productoId: item.Producto.id },
-            { categoriaId: item.Producto.categoriaId },
-          ],
-        },
+        where: filtroPromocion,
       });
 
       if (promocion) {
@@ -93,7 +91,7 @@ const confirmarVenta = async (req, res) => {
         });
 
         promocionUsada = {
-          producto: item.Producto.nombre,
+          producto: producto.nombre,
           promocion: promocion.nombre_promocion,
           tipo: promocion.tipo,
           valor: promocion.valor_descuento,
@@ -104,15 +102,20 @@ const confirmarVenta = async (req, res) => {
         detallesDescuentos.push(promocionUsada);
       }
 
-      subtotal += precio_final * item.cantidad;
+      subtotal += precio_final * producto.cantidad;
 
       // 🔄 **Reducir stock después de la venta**
-      await item.Producto.update({
-        stock: item.Producto.stock - item.cantidad,
-        eliminado: item.Producto.stock - item.cantidad === 0, // 🔥 Si el stock llega a 0, marcar como agotado.
-      });
+      const nuevoStock = stockDisponible.stock - producto.cantidad;
+      if (nuevoStock < 0) {
+        return res.status(400).json({
+          error: `Stock insuficiente para el producto: ${producto.nombre}. Quedan: ${stockDisponible.stock}, solicitado: ${producto.cantidad}`,
+        });
+      }
 
-      await item.update({ estado: "procesado" }); // 🔄 Cambiar estado en la cesta
+      await Producto.update(
+        { stock: nuevoStock },
+        { where: { id: producto.productoId } }
+      );
     }
 
     // 🔍 **Calcular IGV (18%)**
@@ -121,6 +124,12 @@ const confirmarVenta = async (req, res) => {
 
     // 🔄 **Actualizar el total de la venta después de aplicar descuentos e impuestos**
     await nuevaVenta.update({ total: totalConImpuestos });
+
+    // 🔄 **Actualizar la cesta como `procesado`**
+    await CestaVentas.update(
+      { estado: "procesado" },
+      { where: { cestaId, usuarioId } }
+    );
 
     res.status(201).json({
       mensaje:
