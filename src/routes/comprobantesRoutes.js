@@ -50,47 +50,63 @@ router.get("/:id/pdf", async (req, res) => {
   try {
     const comprobanteId = req.params.id;
 
-    // 🔹 Obtener datos reales del comprobante desde la base de datos
+    // 🔹 Obtener el comprobante desde la BD
     const comprobante = await Comprobante.findOne({
       where: { id: comprobanteId },
     });
 
-    // 🔹 Validar si existe el comprobante
     if (!comprobante) {
       return res.status(404).send("Comprobante no encontrado.");
     }
 
-    // 🔹 Estructurar datos para la plantilla
+    // 🔄 **Verificar y convertir `detalle` a JSON si es string**
+    let detalleProductos;
+    try {
+      detalleProductos =
+        typeof comprobante.detalle === "string"
+          ? JSON.parse(comprobante.detalle)
+          : comprobante.detalle;
+    } catch (error) {
+      console.error("Error al parsear detalle:", error);
+      return res
+        .status(500)
+        .send("Error al procesar los productos del comprobante.");
+    }
+
+    // 🔄 **Transformar `detalle` para que coincida con la plantilla**
+    const detalleFinal = detalleProductos.map((producto) => ({
+      descripcion: producto.nombre, // 🔹 Mapeamos `nombre` a `descripcion`
+      cantidad: producto.cantidad,
+      precio_unitario: producto.precio, // 🔹 Mapeamos `precio` a `precio_unitario`
+      subtotal: producto.precio * producto.cantidad,
+      igv_item: producto.precio * producto.cantidad * 0.18,
+      total_item: producto.precio * producto.cantidad * 1.18,
+    }));
+
+    console.log("Detalle final para el PDF:", detalleFinal);
+
+    // 🔹 Estructurar datos para el PDF
     const datosComprobante = {
       numero: comprobante.numero,
-      logo_empresa:
-        comprobante.logo_empresa || "https://via.placeholder.com/100",
-      emisor_razon_social: comprobante.emisor_razon_social,
-      emisor_ruc: comprobante.emisor_ruc,
-      emisor_direccion: comprobante.emisor_direccion,
-      emisor_telefono: comprobante.emisor_telefono,
-      tipo: comprobante.tipo,
       serie: comprobante.serie,
+      emisor_ruc: comprobante.emisor_ruc,
       fecha_emision: comprobante.fecha_emision,
-      fecha_vencimiento: comprobante.fecha_vencimiento,
       moneda: comprobante.moneda,
       cliente_nombre: comprobante.cliente_nombre,
       cliente_dni_ruc: comprobante.cliente_dni_ruc,
       subtotal: comprobante.subtotal,
       IGV: comprobante.IGV,
       total_final: comprobante.total_final,
-      detalle: comprobante.detalle, // Asegurar que esto sea un array con productos
+      detalle: detalleFinal, // 🔹 Enviamos la estructura correcta a la plantilla
     };
 
-    // 🔹 Generar el PDF con los datos reales
+    // 🔹 Generar el PDF con datos reales
     const pdfPath = await generarPdfComprobante(datosComprobante);
 
-    // 🔹 Enviar el PDF al usuario
     res.sendFile(pdfPath);
   } catch (error) {
     console.error("Error generando PDF:", error);
     res.status(500).send("Error generando el comprobante en PDF.");
   }
 });
-
 module.exports = router;

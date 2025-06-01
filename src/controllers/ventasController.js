@@ -22,11 +22,9 @@ const confirmarVenta = async (req, res) => {
     });
 
     if (!cesta || cesta.productos.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "La cesta no tiene productos activos para confirmar la venta.",
-        });
+      return res.status(400).json({
+        error: "La cesta no tiene productos activos para confirmar la venta.",
+      });
     }
 
     let subtotal = 0;
@@ -42,7 +40,22 @@ const confirmarVenta = async (req, res) => {
 
     // 🔧 **Aplicar descuentos y actualizar stock**
     for (const producto of cesta.productos) {
-      const stockDisponible = await Producto.findByPk(producto.productoId);
+      const stockDisponible = await Producto.findOne({
+        where: { id: producto.productoId },
+        attributes: ["id", "nombre", "stock"], // 🔹 Asegurar que traemos estos atributos
+        raw: true, // 🔹 Evitar datos obsoletos en la consulta
+      });
+
+      console.log(
+        `Stock en BD del producto ${producto.nombre} (ID: ${producto.productoId}):`,
+        stockDisponible?.stock
+      );
+      console.log(
+        `Consultando stock del producto: ${producto.nombre} (ID: ${producto.productoId})`
+      );
+      console.log(
+        `Stock disponible en BD: ${stockDisponible ? stockDisponible.stock : 0}`
+      );
       if (!stockDisponible || isNaN(producto.cantidad)) {
         return res.status(400).json({
           error: `Stock insuficiente o cantidad inválida para el producto: ${

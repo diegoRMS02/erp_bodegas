@@ -1,6 +1,8 @@
 const ComprobantesPago = require("../models/comprobantesPago");
 const crypto = require("crypto");
 const { Op } = require("sequelize");
+const Venta = require("../models/Venta");
+const CestaVentas = require("../models/cestaVentas");
 // 🔹 Función para generar un código hash único (usamos SHA-256)
 const generarCodigoHash = (comprobante) => {
   const datos = `${comprobante.emisor_ruc}-${comprobante.serie}-${comprobante.numero}-${comprobante.total_final}`;
@@ -11,6 +13,7 @@ const generarCodigoHash = (comprobante) => {
 const crearComprobante = async (req, res) => {
   try {
     const {
+      ventaId,
       serie,
       numero,
       fecha_emision,
@@ -21,44 +24,44 @@ const crearComprobante = async (req, res) => {
       cliente_nombre,
       cliente_dni_ruc,
       tipo_documento_cliente,
-      subtotal,
-      IGV,
-      total_final,
-      detalle, // 🔹 Lista de productos
     } = req.body;
 
-    // 🔹 Validación: Verificamos que los datos esenciales no estén vacíos
-    if (!serie || !numero || !emisor_ruc || !total_final || !detalle) {
-      return res
-        .status(400)
-        .json({ error: "Faltan datos esenciales del comprobante." });
+    // 🔍 **Validar datos de entrada**
+    if (!ventaId || !serie || !numero || !emisor_ruc) {
+      return res.status(400).json({
+        error: "Debe proporcionar datos válidos para generar el comprobante.",
+      });
     }
 
-    // 🔹 Verificamos si ya existe un comprobante con la misma serie y número
-    const comprobanteExistente = await ComprobantesPago.findOne({
-      where: { serie, numero },
+    // 🔄 **Obtener la venta y la cesta vinculada**
+    const venta = await Venta.findOne({ where: { id: ventaId } });
+    if (!venta) {
+      return res.status(404).json({ error: "La venta no existe." });
+    }
+
+    const cesta = await CestaVentas.findOne({
+      where: { cestaId: venta.cestaId, estado: "procesado" },
     });
-    if (comprobanteExistente) {
-      return res
-        .status(400)
-        .json({
-          mensaje: "Ya existe un comprobante con la misma serie y número.",
-        });
+    if (!cesta) {
+      return res.status(400).json({
+        error:
+          "La cesta no está procesada, no se puede generar el comprobante.",
+      });
     }
 
-    // 🔹 Asegurar que `detalle` sea JSON válido antes de guardarlo
-    let detalleProductos;
-    try {
-      detalleProductos = JSON.parse(detalle); // Si viene como string, convertirlo
-    } catch (error) {
-      detalleProductos = detalle; // Si ya es un array, lo dejamos tal cual
-    }
+    // 🔄 **Extraer los productos vendidos**
+    const detalleProductos = cesta.productos.map((producto) => ({
+      productoId: producto.productoId,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      cantidad: producto.cantidad,
+    }));
 
-    // 🔹 Creamos el objeto comprobante con los datos recibidos
+    // 🔄 **Generar comprobante**
     const comprobante = {
       serie,
       numero,
-      fecha_emision: fecha_emision || new Date(), // Si no se envía fecha, se usa la actual
+      fecha_emision: fecha_emision || new Date(),
       tipo,
       emisor_ruc,
       emisor_razon_social,
@@ -66,27 +69,26 @@ const crearComprobante = async (req, res) => {
       cliente_nombre,
       cliente_dni_ruc,
       tipo_documento_cliente,
-      tipo_operacion: "0101", // Venta interna (valor fijo)
-      moneda: "PEN", // Moneda en soles peruanos (por defecto)
-      subtotal,
-      IGV,
-      total_final,
-      detalle: detalleProductos, // 🔹 Guardamos `detalle` como JSON
+      tipo_operacion: "0101",
+      moneda: "PEN",
+      subtotal: venta.total / 1.18,
+      IGV: venta.total - venta.total / 1.18,
+      total_final: venta.total,
+      detalle: detalleProductos, // 🔹 Ahora obtenemos los productos desde `CestaVentas`
       codigo_hash: generarCodigoHash({
         emisor_ruc,
         serie,
         numero,
-        total_final,
-      }), // Generamos el código hash
-      estado_sunat: "pendiente", // Estado inicial antes de la validación
+        total_final: venta.total,
+      }),
+      estado_sunat: "pendiente",
     };
 
-    // 🔹 Guardamos el comprobante en la base de datos
+    // 🔄 **Guardar comprobante en la BD**
     const nuevoComprobante = await ComprobantesPago.create(comprobante);
 
-    // 🔹 Respuesta al usuario con el comprobante creado
     res.status(201).json({
-      mensaje: "Comprobante creado correctamente.",
+      mensaje: "Comprobante creado correctamente con datos reales de la venta.",
       comprobante: nuevoComprobante,
     });
   } catch (error) {

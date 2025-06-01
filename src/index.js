@@ -48,35 +48,70 @@ app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "views"));
 
 // 🔹 Ruta para vista previa del comprobante antes del PDF
-app.get("/vista-comprobante", (req, res) => {
-  const datosComprobante = {
-    logo_empresa: "https://via.placeholder.com/100",
-    emisor_razon_social: "Empresa Perú SAC",
-    emisor_ruc: "20123456789",
-    emisor_direccion: "Av. Central 456, Lima",
-    serie: "F001",
-    numero: "00012345",
-    fecha_emision: "2025-06-01",
-    tipo: "Factura",
-    cliente_nombre: "Carlos Ramírez",
-    cliente_dni_ruc: "20567890123",
-    subtotal: 500,
-    IGV: 90,
-    total_final: 590,
-    detalle: [
-      {
-        descripcion: "Laptop Lenovo",
-        cantidad: 1,
-        precio_unitario: 500,
-        subtotal: 500,
-        igv_item: 90,
-        total_item: 590,
-      },
-    ],
-  };
+app.get("/vista-comprobante/:id", async (req, res) => {
+  try {
+    const comprobanteId = req.params.id;
 
-  // 🔹 Renderizar la plantilla con `main.hbs` como layout
-  res.render("comprobanteTemplate", { layout: "main", ...datosComprobante });
+    // 🔹 Obtener el comprobante desde la BD
+    const comprobante = await ComprobantesPago.findOne({
+      where: { id: comprobanteId },
+    });
+
+    if (!comprobante) {
+      return res.status(404).send("Comprobante no encontrado.");
+    }
+
+    // 🔄 **Inspeccionar qué datos llegan en `detalle`**
+    console.log("Detalle antes de procesar:", comprobante.detalle);
+
+    // 🔍 **Convertir `detalle` a JSON si es string**
+    let detalleProductos;
+    try {
+      detalleProductos =
+        typeof comprobante.detalle === "string"
+          ? JSON.parse(comprobante.detalle)
+          : comprobante.detalle;
+    } catch (error) {
+      console.error("Error al parsear detalle:", error);
+      return res
+        .status(500)
+        .send("Error al procesar los productos del comprobante.");
+    }
+
+    console.log("Detalle después de procesar:", detalleProductos);
+
+    // 🔹 Verificar si `detalleProductos` está vacío
+    if (!detalleProductos || detalleProductos.length === 0) {
+      return res
+        .status(400)
+        .send("El comprobante no tiene productos registrados.");
+    }
+
+    // 🔹 Estructurar datos para Handlebars
+    const datosComprobante = {
+      logo_empresa:
+        comprobante.logo_empresa || "https://via.placeholder.com/100",
+      emisor_razon_social: comprobante.emisor_razon_social,
+      emisor_ruc: comprobante.emisor_ruc,
+      emisor_direccion: comprobante.emisor_direccion,
+      serie: comprobante.serie,
+      numero: comprobante.numero,
+      fecha_emision: comprobante.fecha_emision,
+      tipo: comprobante.tipo,
+      cliente_nombre: comprobante.cliente_nombre,
+      cliente_dni_ruc: comprobante.cliente_dni_ruc,
+      subtotal: comprobante.subtotal,
+      IGV: comprobante.IGV,
+      total_final: comprobante.total_final,
+      detalle: detalleProductos, // 🔹 Ahora `detalle` está verificado
+    };
+
+    // 🔹 Renderizar la plantilla con `main.hbs`
+    res.render("comprobanteTemplate", { layout: "main", ...datosComprobante });
+  } catch (error) {
+    console.error("Error mostrando la vista previa del comprobante:", error);
+    res.status(500).send("Error interno al mostrar la vista previa.");
+  }
 });
 
 // 🔹 Definir relaciones entre modelos
