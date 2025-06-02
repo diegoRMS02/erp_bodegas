@@ -4,13 +4,15 @@ const Producto = require("../models/Producto");
 const PromocionesDescuentos = require("../models/promocionesDescuentos");
 const VentasDescuentos = require("../models/ventasDescuentos");
 const { Op } = require("sequelize");
-
+const sequelize = require("../config/db");
 const confirmarVenta = async (req, res) => {
+  const transaction = await sequelize.transaction(); // 🔹 Crear transacción
   try {
     const { usuarioId, cestaId, codigo_promocional } = req.body;
 
     // 🔍 **Validar datos de entrada**
     if (!usuarioId || !cestaId || isNaN(usuarioId) || isNaN(cestaId)) {
+      await transaction.rollback();
       return res
         .status(400)
         .json({ error: "Debe proporcionar usuarioId y cestaId válidos." });
@@ -19,9 +21,11 @@ const confirmarVenta = async (req, res) => {
     // 🔄 **Obtener la cesta con productos almacenados en JSON**
     const cesta = await CestaVentas.findOne({
       where: { cestaId, usuarioId, estado: "pendiente" },
+      transaction,
     });
 
-    if (!cesta || cesta.productos.length === 0) {
+    if (!cesta || !cesta.productos || cesta.productos.length === 0) {
+      await transaction.rollback();
       return res.status(400).json({
         error: "La cesta no tiene productos activos para confirmar la venta.",
       });
@@ -30,47 +34,50 @@ const confirmarVenta = async (req, res) => {
     let subtotal = 0;
     let detallesDescuentos = [];
 
-    // 🔄 **Registrar la venta antes de aplicar descuentos**
-    const nuevaVenta = await Venta.create({
-      usuarioId,
-      cestaId,
-      total: subtotal, // Se actualizará más adelante
-      fecha: new Date(),
-    });
-
-    // 🔧 **Aplicar descuentos y actualizar stock**
+    // 🔧 **Verificar stock antes de registrar la venta**
     for (const producto of cesta.productos) {
-      const stockDisponible = await Producto.findOne({
+      let stockDisponible = await Producto.findOne({
         where: { id: producto.productoId },
-        attributes: ["id", "nombre", "stock"], // 🔹 Asegurar que traemos estos atributos
-        raw: true, // 🔹 Evitar datos obsoletos en la consulta
+        attributes: ["stock"],
+        raw: true,
+        transaction,
       });
 
-      console.log(
-        `Stock en BD del producto ${producto.nombre} (ID: ${producto.productoId}):`,
-        stockDisponible?.stock
-      );
-      console.log(
-        `Consultando stock del producto: ${producto.nombre} (ID: ${producto.productoId})`
-      );
-      console.log(
-        `Stock disponible en BD: ${stockDisponible ? stockDisponible.stock : 0}`
-      );
-      if (!stockDisponible || isNaN(producto.cantidad)) {
+      if (!stockDisponible || stockDisponible.stock < producto.cantidad) {
+        await transaction.rollback();
         return res.status(400).json({
-          error: `Stock insuficiente o cantidad inválida para el producto: ${
+          error: `Stock insuficiente para el producto: ${
             producto.nombre
-          }. Disponible: ${
-            stockDisponible ? stockDisponible.stock : 0
-          }, solicitado: ${producto.cantidad}`,
+          }. Disponible: ${stockDisponible?.stock || 0}, solicitado: ${
+            producto.cantidad
+          }`,
         });
       }
+    }
 
+    // 🔄 **Registrar la venta SOLO si todo está bien**
+    const nuevaVenta = await Venta.create(
+      {
+        usuarioId,
+        cestaId,
+        total: 0,
+        fecha: new Date(),
+      },
+      { transaction }
+    );
+
+    // 🔧 **Aplicar descuentos y reducir stock**
+    for (const producto of cesta.productos) {
+      let stockDisponible = await Producto.findOne({
+        where: { id: producto.productoId },
+        attributes: ["stock"],
+        raw: true,
+        transaction,
+      });
       let precio_final = producto.precio;
       let descuentoAplicado = 0;
-      let promocionUsada = null;
 
-      // 🔍 **Verificar si `categoriaId` existe antes de buscar promociones**
+      // 🔍 **Evitar error de `undefined` en `categoriaId`**
       const filtroPromocion = {
         estado: "activo",
         fecha_inicio: { [Op.lte]: new Date() },
@@ -79,70 +86,62 @@ const confirmarVenta = async (req, res) => {
 
       if (producto.productoId)
         filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
-      if (producto.categoriaId)
+      if (producto.categoriaId !== undefined)
         filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
 
       const promocion = await PromocionesDescuentos.findOne({
         where: filtroPromocion,
+        transaction,
       });
 
       if (promocion) {
-        if (promocion.tipo === "porcentaje") {
-          descuentoAplicado = precio_final * (promocion.valor_descuento / 100);
-        } else if (promocion.tipo === "cantidad_fija") {
-          descuentoAplicado = promocion.valor_descuento;
-        }
-
+        descuentoAplicado =
+          promocion.tipo === "porcentaje"
+            ? precio_final * (promocion.valor_descuento / 100)
+            : promocion.valor_descuento;
         precio_final -= descuentoAplicado;
 
-        await VentasDescuentos.create({
-          ventaId: nuevaVenta.id,
-          promocionId: promocion.id,
-          tipo: promocion.tipo,
-          valor_descuento: promocion.valor_descuento,
-          precio_final,
-        });
+        await VentasDescuentos.create(
+          {
+            ventaId: nuevaVenta.id,
+            promocionId: promocion.id,
+            tipo: promocion.tipo,
+            valor_descuento: promocion.valor_descuento,
+            precio_final,
+          },
+          { transaction }
+        );
 
-        promocionUsada = {
+        detallesDescuentos.push({
           producto: producto.nombre,
           promocion: promocion.nombre_promocion,
           tipo: promocion.tipo,
-          valor: promocion.valor_descuento,
           descuentoAplicado,
           precioFinal: precio_final,
-        };
-
-        detallesDescuentos.push(promocionUsada);
+        });
       }
 
       subtotal += precio_final * producto.cantidad;
 
       // 🔄 **Reducir stock después de la venta**
-      const nuevoStock = stockDisponible.stock - producto.cantidad;
-      if (nuevoStock < 0) {
-        return res.status(400).json({
-          error: `Stock insuficiente para el producto: ${producto.nombre}. Quedan: ${stockDisponible.stock}, solicitado: ${producto.cantidad}`,
-        });
-      }
-
       await Producto.update(
-        { stock: nuevoStock },
-        { where: { id: producto.productoId } }
+        { stock: stockDisponible.stock - producto.cantidad },
+        { where: { id: producto.productoId }, transaction }
       );
     }
 
-    // 🔍 **Calcular IGV (18%)**
+    // 🔍 **Calcular IGV (18%) y actualizar total**
     const IGV = subtotal * 0.18;
     const totalConImpuestos = subtotal + IGV;
-
-    // 🔄 **Actualizar el total de la venta después de aplicar descuentos e impuestos**
-    await nuevaVenta.update({ total: totalConImpuestos });
+    await nuevaVenta.update({ total: totalConImpuestos }, { transaction });
 
     // 🔄 **Actualizar la cesta como `procesado`**
     await CestaVentas.update(
       { estado: "procesado" },
-      { where: { cestaId, usuarioId } }
+      { where: { cestaId, usuarioId }, transaction }
     );
+
+    await transaction.commit(); // ✅ Confirmar la transacción
 
     res.status(201).json({
       mensaje:
@@ -154,6 +153,7 @@ const confirmarVenta = async (req, res) => {
       totalFinal: totalConImpuestos,
     });
   } catch (error) {
+    await transaction.rollback(); // 🔄 Si hay error, revertir todo para evitar ventas vacías
     console.error("Error al confirmar venta:", error);
     res.status(500).json({ error: "Error interno al confirmar venta." });
   }

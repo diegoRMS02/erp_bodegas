@@ -9,7 +9,6 @@ const generarCodigoHash = (comprobante) => {
   return crypto.createHash("sha256").update(datos).digest("hex");
 };
 
-// 🔹 Controlador para crear un nuevo comprobante de pago
 const crearComprobante = async (req, res) => {
   try {
     const {
@@ -30,6 +29,17 @@ const crearComprobante = async (req, res) => {
     if (!ventaId || !serie || !numero || !emisor_ruc) {
       return res.status(400).json({
         error: "Debe proporcionar datos válidos para generar el comprobante.",
+      });
+    }
+
+    // 🔄 **Verificar si el comprobante con la misma serie y número ya existe**
+    const comprobanteExistente = await ComprobantesPago.findOne({
+      where: { serie, numero },
+    });
+
+    if (comprobanteExistente) {
+      return res.status(400).json({
+        error: `El comprobante con serie ${serie} y número ${numero} ya existe.`,
       });
     }
 
@@ -68,7 +78,7 @@ const crearComprobante = async (req, res) => {
     const comprobante = {
       serie,
       numero,
-      fecha_emision: fechaFormateada, // 🔹 Ahora guardamos la fecha en formato "1/06/2025"
+      fecha_emision: fechaFormateada,
       tipo,
       emisor_ruc,
       emisor_razon_social,
@@ -81,7 +91,7 @@ const crearComprobante = async (req, res) => {
       subtotal: venta.total / 1.18,
       IGV: venta.total - venta.total / 1.18,
       total_final: venta.total,
-      detalle: detalleProductos, // 🔹 Ahora obtenemos los productos desde `CestaVentas`
+      detalle: detalleProductos,
       codigo_hash: generarCodigoHash({
         emisor_ruc,
         serie,
@@ -103,7 +113,6 @@ const crearComprobante = async (req, res) => {
     res.status(500).json({ error: "Error interno del servidor." });
   }
 };
-
 // 🔹 Obtener todos los comprobantes activos
 const obtenerComprobantes = async (req, res) => {
   try {
