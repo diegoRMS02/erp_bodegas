@@ -5,7 +5,7 @@ const {
   verificacionToken,
   verificacionAdmin,
 } = require("../middleware/authMiddleware");
-const Comprobante = require("../models/comprobantesPago"); // Asegúrate de que la ruta sea correcta
+const ComprobantesPago = require("../models/comprobantesPago"); // Asegúrate de que la ruta sea correcta
 const generarPdfComprobante = require("../services/generarPdfComprobante");
 router.post(
   "/crear",
@@ -51,13 +51,22 @@ router.get("/:id/pdf", async (req, res) => {
     const comprobanteId = req.params.id;
 
     // 🔹 Obtener el comprobante desde la BD
-    const comprobante = await Comprobante.findOne({
+    const comprobante = await ComprobantesPago.findOne({
       where: { id: comprobanteId },
     });
 
     if (!comprobante) {
       return res.status(404).send("Comprobante no encontrado.");
     }
+
+    // 🔄 **Formatear `fecha_emision` antes de enviarla al PDF**
+    const fechaFormateada = new Date(
+      comprobante.fecha_emision
+    ).toLocaleDateString("es-PE", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
 
     // 🔄 **Verificar y convertir `detalle` a JSON si es string**
     let detalleProductos;
@@ -83,14 +92,12 @@ router.get("/:id/pdf", async (req, res) => {
       total_item: producto.precio * producto.cantidad * 1.18,
     }));
 
-    console.log("Detalle final para el PDF:", detalleFinal);
-
     // 🔹 Estructurar datos para el PDF
     const datosComprobante = {
       numero: comprobante.numero,
       serie: comprobante.serie,
-      emisor_ruc: comprobante.emisor_ruc,
-      fecha_emision: comprobante.fecha_emision,
+      emisor_ruc: comprobante.emisor_ruc, // 🔹 Asegurar que `emisor_ruc` se pase correctamente
+      fecha_emision: fechaFormateada, // 🔹 Ahora la fecha está en formato "1/06/2025"
       moneda: comprobante.moneda,
       cliente_nombre: comprobante.cliente_nombre,
       cliente_dni_ruc: comprobante.cliente_dni_ruc,

@@ -23,7 +23,7 @@ const ComprobantesPago = sequelize.define(
 
     // 🔹 Fecha de emisión del comprobante (Formato ISO 8601)
     fecha_emision: {
-      type: DataTypes.DATE,
+      type: DataTypes.STRING, // 🔹 Cambiar de DataTypes.DATE a DataTypes.STRING
       allowNull: false,
     },
     tipo: {

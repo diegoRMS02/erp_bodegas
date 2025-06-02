@@ -57,11 +57,18 @@ const crearComprobante = async (req, res) => {
       cantidad: producto.cantidad,
     }));
 
+    // 🔄 **Formatear fecha_emision antes de guardarla**
+    const fechaFormateada = new Date().toLocaleDateString("es-PE", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
+
     // 🔄 **Generar comprobante**
     const comprobante = {
       serie,
       numero,
-      fecha_emision: fecha_emision || new Date(),
+      fecha_emision: fechaFormateada, // 🔹 Ahora guardamos la fecha en formato "1/06/2025"
       tipo,
       emisor_ruc,
       emisor_razon_social,
