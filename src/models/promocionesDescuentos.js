@@ -31,6 +31,11 @@ const PromocionesDescuentos = sequelize.define(
       type: DataTypes.ENUM("activo", "inactivo"),
       defaultValue: "activo",
     },
+    acumulable: {
+      // 🔹 Permitir que el administrador defina si el descuento se puede combinar con otros
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     creadoPor: { type: DataTypes.INTEGER, allowNull: false },
     fechaCreacion: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     modificadoPor: {
