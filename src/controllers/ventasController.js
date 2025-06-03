@@ -5,43 +5,72 @@ const PromocionesDescuentos = require("../models/promocionesDescuentos");
 const VentasDescuentos = require("../models/ventasDescuentos");
 const { Op } = require("sequelize");
 const sequelize = require("../config/db");
+
 const confirmarVenta = async (req, res) => {
-  const transaction = await sequelize.transaction(); // 🔹 Crear transacción
+  const transaction = await sequelize.transaction();
+
   try {
     const { usuarioId, cestaId, codigo_promocional } = req.body;
+    console.log("📌 Iniciando confirmación de venta", {
+      usuarioId,
+      cestaId,
+      codigo_promocional,
+    });
 
-    // 🔍 **Validar datos de entrada**
-    if (!usuarioId || !cestaId || isNaN(usuarioId) || isNaN(cestaId)) {
-      await transaction.rollback();
-      return res
-        .status(400)
-        .json({ error: "Debe proporcionar usuarioId y cestaId válidos." });
-    }
-
-    // 🔄 **Obtener la cesta con productos almacenados en JSON**
+    // 🔄 **Obtener la cesta de la BD**
     const cesta = await CestaVentas.findOne({
       where: { cestaId, usuarioId, estado: "pendiente" },
+      attributes: ["productos"],
+      raw: true,
       transaction,
     });
 
-    if (!cesta || !cesta.productos || cesta.productos.length === 0) {
+    console.log("📌 Cesta obtenida desde BD:", cesta);
+
+    if (!cesta || !cesta.productos) {
       await transaction.rollback();
-      return res.status(400).json({
-        error: "La cesta no tiene productos activos para confirmar la venta.",
-      });
+      console.error(
+        "❌ Error: La cesta no se obtuvo correctamente desde la BD."
+      );
+      return res
+        .status(400)
+        .json({
+          error: "Error al obtener la cesta, no se puede confirmar la venta.",
+        });
     }
+
+    // 🔄 **Extraer los productos correctamente**
+    let productosCesta;
+    try {
+      productosCesta =
+        typeof cesta.productos === "string"
+          ? JSON.parse(cesta.productos)
+          : cesta.productos;
+    } catch (error) {
+      console.error("❌ Error al procesar los productos en la venta:", error);
+      await transaction.rollback();
+      return res
+        .status(500)
+        .json({ error: "Error al procesar los productos en la venta." });
+    }
+
+    console.log("✅ Productos extraídos desde la cesta:", productosCesta);
 
     let subtotal = 0;
     let detallesDescuentos = [];
 
-    // 🔧 **Verificar stock antes de registrar la venta**
-    for (const producto of cesta.productos) {
+    // 🔄 **Procesar cada producto y aplicar descuentos**
+    for (const producto of productosCesta) {
+      console.log("🛒 Producto procesado:", producto);
+
       let stockDisponible = await Producto.findOne({
         where: { id: producto.productoId },
         attributes: ["stock"],
         raw: true,
         transaction,
       });
+
+      console.log("📦 Stock disponible:", stockDisponible);
 
       if (!stockDisponible || stockDisponible.stock < producto.cantidad) {
         await transaction.rollback();
@@ -53,74 +82,80 @@ const confirmarVenta = async (req, res) => {
           }`,
         });
       }
-    }
 
-    // 🔄 **Registrar la venta SOLO si todo está bien**
-    const nuevaVenta = await Venta.create(
-      {
-        usuarioId,
-        cestaId,
-        total: 0,
-        fecha: new Date(),
-      },
-      { transaction }
-    );
-
-    // 🔧 **Aplicar descuentos y reducir stock**
-    for (const producto of cesta.productos) {
-      let stockDisponible = await Producto.findOne({
-        where: { id: producto.productoId },
-        attributes: ["stock"],
-        raw: true,
-        transaction,
-      });
       let precio_final = producto.precio;
       let descuentoAplicado = 0;
 
-      // 🔍 **Evitar error de `undefined` en `categoriaId`**
+      // 🔍 **Verificar promociones activas en la BD**
+      console.log(
+        "🛠 Buscando promociones activas para:",
+        producto.nombre,
+        "ID:",
+        producto.productoId
+      );
+
+      const hoy = new Date();
       const filtroPromocion = {
         estado: "activo",
-        fecha_inicio: { [Op.lte]: new Date() },
-        fecha_fin: { [Op.gte]: new Date() },
+        fecha_inicio: { [Op.lte]: sequelize.fn("NOW") },
+        fecha_fin: { [Op.gte]: sequelize.fn("NOW") },
       };
 
-      if (producto.productoId)
-        filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
-      if (producto.categoriaId !== undefined)
-        filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
+      // 🔹 **Corrección:** Agregamos detección de `codigo_promocional`
+      if (codigo_promocional) {
+        filtroPromocion.codigo_promocional = codigo_promocional; // 🔹 Se busca por código promocional
+      } else {
+        if (producto.productoId)
+          filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
+        if (producto.categoriaId)
+          filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
+      }
 
-      const promocion = await PromocionesDescuentos.findOne({
+      const promocionesDisponibles = await PromocionesDescuentos.findAll({
         where: filtroPromocion,
         transaction,
       });
 
-      if (promocion) {
-        descuentoAplicado =
-          promocion.tipo === "porcentaje"
-            ? precio_final * (promocion.valor_descuento / 100)
-            : promocion.valor_descuento;
-        precio_final -= descuentoAplicado;
+      console.log("🎯 Promociones encontradas en BD:", promocionesDisponibles);
 
-        await VentasDescuentos.create(
-          {
-            ventaId: nuevaVenta.id,
-            promocionId: promocion.id,
+      // 🔄 **Aplicar descuento si hay promociones**
+      if (promocionesDisponibles.length > 0) {
+        for (const promocion of promocionesDisponibles) {
+          if (promocion.tipo === "porcentaje") {
+            descuentoAplicado +=
+              precio_final * (promocion.valor_descuento / 100);
+          } else if (promocion.tipo === "cantidad_fija") {
+            descuentoAplicado += promocion.valor_descuento;
+          } else if (
+            promocion.tipo === "combo" &&
+            producto.cantidad >= promocion.cantidad_minima
+          ) {
+            descuentoAplicado += promocion.valor_descuento;
+          }
+
+          await VentasDescuentos.create(
+            {
+              ventaId: cestaId,
+              promocionId: promocion.id,
+              tipo: promocion.tipo,
+              valor_descuento: promocion.valor_descuento,
+              precio_final: precio_final - descuentoAplicado,
+            },
+            { transaction }
+          );
+
+          detallesDescuentos.push({
+            producto: producto.nombre,
+            promocion: promocion.nombre_promocion,
             tipo: promocion.tipo,
-            valor_descuento: promocion.valor_descuento,
-            precio_final,
-          },
-          { transaction }
-        );
-
-        detallesDescuentos.push({
-          producto: producto.nombre,
-          promocion: promocion.nombre_promocion,
-          tipo: promocion.tipo,
-          descuentoAplicado,
-          precioFinal: precio_final,
-        });
+            descuentoAplicado,
+            precioFinal: precio_final - descuentoAplicado,
+          });
+        }
       }
 
+      // 🔄 **Actualizar precio final con descuentos aplicados**
+      precio_final -= descuentoAplicado;
       subtotal += precio_final * producto.cantidad;
 
       // 🔄 **Reducir stock después de la venta**
@@ -133,19 +168,24 @@ const confirmarVenta = async (req, res) => {
     // 🔍 **Calcular IGV (18%) y actualizar total**
     const IGV = subtotal * 0.18;
     const totalConImpuestos = subtotal + IGV;
-    await nuevaVenta.update({ total: totalConImpuestos }, { transaction });
 
-    // 🔄 **Actualizar la cesta como `procesado`**
-    await CestaVentas.update(
-      { estado: "procesado" },
-      { where: { cestaId, usuarioId }, transaction }
+    // 🔄 **Registrar la venta oficialmente**
+    const nuevaVenta = await Venta.create(
+      {
+        usuarioId,
+        cestaId,
+        total: totalConImpuestos,
+        fecha: new Date(),
+      },
+      { transaction }
     );
 
-    await transaction.commit(); // ✅ Confirmar la transacción
+    console.log("✅ Venta registrada:", nuevaVenta.id);
+
+    await transaction.commit();
 
     res.status(201).json({
-      mensaje:
-        "Venta confirmada correctamente con descuentos y stock actualizado.",
+      mensaje: "Venta confirmada correctamente con descuentos aplicados.",
       ventaId: nuevaVenta.id,
       subtotal,
       descuentos: detallesDescuentos,
@@ -153,8 +193,8 @@ const confirmarVenta = async (req, res) => {
       totalFinal: totalConImpuestos,
     });
   } catch (error) {
-    await transaction.rollback(); // 🔄 Si hay error, revertir todo para evitar ventas vacías
-    console.error("Error al confirmar venta:", error);
+    await transaction.rollback();
+    console.error("🚨 Error al confirmar venta:", error);
     res.status(500).json({ error: "Error interno al confirmar venta." });
   }
 };

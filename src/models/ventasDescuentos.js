@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const db = require("../config/db");
 const Venta = require("./Venta");
-const PromocionesDescuentos = require("./PromocionesDescuentos");
+const PromocionesDescuentos = require("./promocionesDescuentos");
 const sequelize = require("../config/db");
 
 const VentasDescuentos = sequelize.define(
@@ -11,7 +11,7 @@ const VentasDescuentos = sequelize.define(
     ventaId: { type: DataTypes.INTEGER, allowNull: false },
     promocionId: { type: DataTypes.INTEGER, allowNull: false },
     tipo: {
-      type: DataTypes.ENUM("porcentaje", "cantidad_fija"),
+      type: DataTypes.ENUM("porcentaje", "cantidad_fija", "combo", "codigo"), // 🔹 Agregamos "codigo" como opción válida
       allowNull: false,
     },
     valor_descuento: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
@@ -20,11 +20,5 @@ const VentasDescuentos = sequelize.define(
   },
   { timestamps: false }
 );
-
-VentasDescuentos.belongsTo(Venta, { foreignKey: "ventaId", as: "Venta" });
-VentasDescuentos.belongsTo(PromocionesDescuentos, {
-  foreignKey: "promocionId",
-  as: "Promocion",
-});
 
 module.exports = VentasDescuentos;

@@ -11,7 +11,7 @@ const Producto = require("./models/Producto");
 const Usuario = require("./models/Usuario");
 const auditoriaProducto = require("./models/auditoriaProducto");
 const Categoria = require("./models/Categoria");
-
+const ComprobantesPago = require("./models/comprobantesPago");
 const productoRoutes = require("./routes/productoRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
 const auditoriaRoutes = require("./routes/auditoriaRoutes");

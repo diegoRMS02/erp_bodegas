@@ -10,6 +10,7 @@ const Venta = db.define(
     cestaId: { type: DataTypes.INTEGER, allowNull: false },
     total: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     fecha: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+    codigo_promocional: { type: DataTypes.STRING, allowNull: true }, // 🔹 Nuevo campo para el código promocional
   },
   { timestamps: false }
 );
