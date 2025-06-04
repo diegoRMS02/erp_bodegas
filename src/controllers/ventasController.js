@@ -58,6 +58,31 @@ const confirmarVenta = async (req, res) => {
 
     let subtotal = 0;
     let detallesDescuentos = [];
+    let descuentoCodigo = 0; // 🔹 Variable para manejar el código promocional
+
+    // 🔍 **Si hay un código promocional, obtener el descuento de la BD**
+    if (codigo_promocional) {
+      const promocionCodigo = await PromocionesDescuentos.findOne({
+        where: {
+          codigo_promocional,
+          estado: "activo",
+          fecha_inicio: { [Op.lte]: sequelize.fn("NOW") },
+          fecha_fin: { [Op.gte]: sequelize.fn("NOW") },
+        },
+        transaction,
+      });
+
+      if (promocionCodigo) {
+        descuentoCodigo = promocionCodigo.valor_descuento;
+        console.log(
+          `🎯 Código promocional aplicado: ${codigo_promocional}, Descuento: ${descuentoCodigo}`
+        );
+      } else {
+        console.log(
+          `⚠️ Código promocional ${codigo_promocional} no válido o vencido.`
+        );
+      }
+    }
 
     // 🔄 **Procesar cada producto y aplicar descuentos**
     for (const producto of productosCesta) {
@@ -94,22 +119,16 @@ const confirmarVenta = async (req, res) => {
         producto.productoId
       );
 
-      const hoy = new Date();
       const filtroPromocion = {
         estado: "activo",
         fecha_inicio: { [Op.lte]: sequelize.fn("NOW") },
         fecha_fin: { [Op.gte]: sequelize.fn("NOW") },
       };
 
-      // 🔹 **Corrección:** Agregamos detección de `codigo_promocional`
-      if (codigo_promocional) {
-        filtroPromocion.codigo_promocional = codigo_promocional; // 🔹 Se busca por código promocional
-      } else {
-        if (producto.productoId)
-          filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
-        if (producto.categoriaId)
-          filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
-      }
+      if (producto.productoId)
+        filtroPromocion[Op.or] = [{ productoId: producto.productoId }];
+      if (producto.categoriaId)
+        filtroPromocion[Op.or].push({ categoriaId: producto.categoriaId });
 
       const promocionesDisponibles = await PromocionesDescuentos.findAll({
         where: filtroPromocion,
@@ -118,69 +137,69 @@ const confirmarVenta = async (req, res) => {
 
       console.log("🎯 Promociones encontradas en BD:", promocionesDisponibles);
 
-      // 🔄 **Aplicar descuento si hay promociones**
-      if (promocionesDisponibles.length > 0) {
-        for (const promocion of promocionesDisponibles) {
-          if (promocion.tipo === "porcentaje") {
-            descuentoAplicado +=
-              precio_final * (promocion.valor_descuento / 100);
-          } else if (promocion.tipo === "cantidad_fija") {
-            descuentoAplicado += promocion.valor_descuento;
-          } else if (
-            promocion.tipo === "combo" &&
-            producto.cantidad >= promocion.cantidad_minima
-          ) {
-            descuentoAplicado += promocion.valor_descuento;
-          }
+      // 🔄 **Aplicar descuentos de promociones**
+      for (const promocion of promocionesDisponibles) {
+        let descuentoPromocion = 0;
 
-          await VentasDescuentos.create(
-            {
-              ventaId: cestaId,
-              promocionId: promocion.id,
-              tipo: promocion.tipo,
-              valor_descuento: promocion.valor_descuento,
-              precio_final: precio_final - descuentoAplicado,
-            },
-            { transaction }
-          );
-
-          detallesDescuentos.push({
-            producto: producto.nombre,
-            promocion: promocion.nombre_promocion,
-            tipo: promocion.tipo,
-            descuentoAplicado,
-            precioFinal: precio_final - descuentoAplicado,
-          });
+        if (promocion.tipo === "porcentaje") {
+          descuentoPromocion = precio_final * (promocion.valor_descuento / 100);
+        } else if (promocion.tipo === "cantidad_fija") {
+          descuentoPromocion = promocion.valor_descuento;
+        } else if (
+          promocion.tipo === "combo" &&
+          producto.cantidad >= promocion.cantidad_minima
+        ) {
+          descuentoPromocion = promocion.valor_descuento;
         }
+
+        precio_final -= descuentoPromocion;
+        descuentoAplicado += descuentoPromocion;
+
+        detallesDescuentos.push({
+          producto: producto.nombre,
+          promocion: promocion.nombre_promocion,
+          tipo: promocion.tipo,
+          descuentoAplicado: descuentoPromocion,
+          precioFinal: precio_final,
+        });
       }
 
-      // 🔄 **Actualizar precio final con descuentos aplicados**
-      precio_final -= descuentoAplicado;
-      subtotal += precio_final * producto.cantidad;
+      // 🔄 **Aplicar el descuento del código promocional**
+      if (codigo_promocional && descuentoCodigo > 0) {
+        console.log(
+          `✅ Aplicando código promocional ${codigo_promocional}: Descuento ${descuentoCodigo}`
+        );
+        precio_final -= descuentoCodigo;
+        descuentoAplicado += descuentoCodigo;
 
-      // 🔄 **Reducir stock después de la venta**
-      await Producto.update(
-        { stock: stockDisponible.stock - producto.cantidad },
-        { where: { id: producto.productoId }, transaction }
-      );
+        detallesDescuentos.push({
+          producto: producto.nombre,
+          promocion: `Código Promocional: ${codigo_promocional}`,
+          tipo: "codigo",
+          descuentoAplicado: descuentoCodigo,
+          precioFinal: precio_final,
+        });
+      }
+
+      subtotal += precio_final * producto.cantidad;
     }
 
-    // 🔍 **Calcular IGV (18%) y actualizar total**
     const IGV = subtotal * 0.18;
     const totalConImpuestos = subtotal + IGV;
 
-    // 🔄 **Registrar la venta oficialmente**
     const nuevaVenta = await Venta.create(
-      {
-        usuarioId,
-        cestaId,
-        total: totalConImpuestos,
-        fecha: new Date(),
-      },
+      { usuarioId, cestaId, total: totalConImpuestos, fecha: new Date() },
       { transaction }
     );
 
     console.log("✅ Venta registrada:", nuevaVenta.id);
+
+    await CestaVentas.update(
+      { estado: "procesado" },
+      { where: { cestaId, usuarioId }, transaction }
+    );
+
+    console.log("✅ Cesta actualizada como 'procesado'.");
 
     await transaction.commit();
 

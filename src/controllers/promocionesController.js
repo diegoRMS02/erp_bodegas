@@ -14,7 +14,8 @@ const crearPromocion = async (req, res) => {
       fecha_inicio,
       fecha_fin,
       codigo_promocional,
-      acumulable, // 🔹 Nuevo campo para definir si el descuento se acumula con otros
+      cantidad_minima, // 🔹 Nuevo campo para definir cantidad mínima en promociones
+      acumulable,
       creadoPor,
     } = req.body;
 
@@ -34,11 +35,9 @@ const crearPromocion = async (req, res) => {
 
     // 🔄 **Validar que la fecha de inicio sea anterior a la fecha de fin**
     if (new Date(fecha_inicio) >= new Date(fecha_fin)) {
-      return res
-        .status(400)
-        .json({
-          error: "La fecha de inicio debe ser anterior a la fecha de fin.",
-        });
+      return res.status(400).json({
+        error: "La fecha de inicio debe ser anterior a la fecha de fin.",
+      });
     }
 
     // 🔄 **Validar si el producto existe en la BD**
@@ -68,17 +67,23 @@ const crearPromocion = async (req, res) => {
         .json({ error: "Debe proporcionar un código promocional válido." });
     }
 
+    // 🔄 **Validar cantidad mínima en promociones**
+    if (!cantidad_minima || cantidad_minima < 1) {
+      cantidad_minima = 1; // 🔹 Si no se proporciona cantidad mínima, establecer en 1 por defecto.
+    }
+
     // 🔄 **Crear la promoción con los datos validados**
     const nuevaPromocion = await PromocionesDescuentos.create({
       nombre_promocion,
       tipo,
       valor_descuento,
-      productoId: productoId || null, // Si no hay producto, guardar como NULL
-      categoriaId: categoriaId || null, // Si no hay categoría, guardar como NULL
+      productoId: productoId || null,
+      categoriaId: categoriaId || null,
       fecha_inicio,
       fecha_fin,
-      codigo_promocional: codigo_promocional || null, // Si no hay código, guardar como NULL
-      acumulable: acumulable || false, // 🔹 Nuevo campo para permitir acumulación de descuentos
+      codigo_promocional: codigo_promocional || null,
+      cantidad_minima, // 🔹 Ahora registramos correctamente la cantidad mínima
+      acumulable: acumulable || false,
       creadoPor,
     });
 
