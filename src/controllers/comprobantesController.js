@@ -25,14 +25,12 @@ const crearComprobante = async (req, res) => {
       tipo_documento_cliente,
     } = req.body;
 
-    // 🔍 **Validar datos de entrada**
     if (!ventaId || !serie || !numero || !emisor_ruc) {
       return res.status(400).json({
         error: "Debe proporcionar datos válidos para generar el comprobante.",
       });
     }
 
-    // 🔄 **Verificar si el comprobante con la misma serie y número ya existe**
     const comprobanteExistente = await ComprobantesPago.findOne({
       where: { serie, numero },
     });
@@ -43,7 +41,6 @@ const crearComprobante = async (req, res) => {
       });
     }
 
-    // 🔄 **Obtener la venta y la cesta vinculada**
     const venta = await Venta.findOne({ where: { id: ventaId } });
     if (!venta) {
       return res.status(404).json({ error: "La venta no existe." });
@@ -52,6 +49,7 @@ const crearComprobante = async (req, res) => {
     const cesta = await CestaVentas.findOne({
       where: { cestaId: venta.cestaId, estado: "procesado" },
     });
+
     if (!cesta) {
       return res.status(400).json({
         error:
@@ -59,22 +57,29 @@ const crearComprobante = async (req, res) => {
       });
     }
 
-    // 🔄 **Extraer los productos vendidos**
-    const detalleProductos = cesta.productos.map((producto) => ({
+    // 🔹 **Corrección: Convertir el JSON string en un array**
+    let productosCesta;
+    try {
+      productosCesta = JSON.parse(cesta.productos);
+    } catch (error) {
+      return res.status(500).json({
+        error: "Error al procesar los productos de la cesta.",
+      });
+    }
+
+    const detalleProductos = productosCesta.map((producto) => ({
       productoId: producto.productoId,
       nombre: producto.nombre,
       precio: producto.precio,
       cantidad: producto.cantidad,
     }));
 
-    // 🔄 **Formatear fecha_emision antes de guardarla**
     const fechaFormateada = new Date().toLocaleDateString("es-PE", {
       day: "numeric",
       month: "numeric",
       year: "numeric",
     });
 
-    // 🔄 **Generar comprobante**
     const comprobante = {
       serie,
       numero,
@@ -101,7 +106,6 @@ const crearComprobante = async (req, res) => {
       estado_sunat: "pendiente",
     };
 
-    // 🔄 **Guardar comprobante en la BD**
     const nuevoComprobante = await ComprobantesPago.create(comprobante);
 
     res.status(201).json({
@@ -113,6 +117,7 @@ const crearComprobante = async (req, res) => {
     res.status(500).json({ error: "Error interno del servidor." });
   }
 };
+
 // 🔹 Obtener todos los comprobantes activos
 const obtenerComprobantes = async (req, res) => {
   try {

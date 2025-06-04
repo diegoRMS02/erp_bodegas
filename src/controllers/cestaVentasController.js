@@ -1,28 +1,40 @@
 const CestaVenta = require("../models/cestaVentas");
 const Producto = require("../models/Producto");
 
+// 🔄 **Agregar producto a la cesta sin modificar la lógica de ventas**
 const agregarACesta = async (req, res) => {
   try {
     const { usuarioId, productos } = req.body;
 
-    // 🔍 **Validación de datos**
     if (!usuarioId || !productos || productos.length === 0) {
       return res
         .status(400)
         .json({ error: "Debe proporcionar al menos un producto." });
     }
 
-    // 🔄 **Verificar y completar cantidad por defecto si falta**
-    productos.forEach((producto) => {
-      if (!producto.cantidad || isNaN(producto.cantidad)) {
-        producto.cantidad = 1;
-      }
-    });
+    let productosCesta = [];
 
-    // 🔹 **Crear una nueva cesta sin calcular `cestaId` manualmente**
+    for (const item of productos) {
+      const productoBD = await Producto.findByPk(item.productoId);
+
+      if (!productoBD) {
+        return res
+          .status(400)
+          .json({ error: `El producto con ID ${item.productoId} no existe.` });
+      }
+
+      productosCesta.push({
+        productoId: item.productoId,
+        nombre: productoBD.nombre,
+        precio: productoBD.precio,
+        cantidad: item.cantidad || 1,
+        categoriaId: productoBD.categoriaId,
+      });
+    }
+
     const nuevaCesta = await CestaVenta.create({
       usuarioId,
-      productos,
+      productos: JSON.stringify(productosCesta),
       estado: "pendiente",
     });
 
@@ -38,7 +50,8 @@ const agregarACesta = async (req, res) => {
       .json({ error: "Error interno al agregar productos a la cesta." });
   }
 };
-// Obtener la cesta de un usuario
+
+// 🔄 **Obtener la cesta de un usuario**
 const obtenerCestaPorUsuario = async (req, res) => {
   try {
     const { usuarioId } = req.params;
@@ -69,7 +82,7 @@ const obtenerCestaPorUsuario = async (req, res) => {
   }
 };
 
-// Eliminar un producto de la cesta
+// 🔄 **Eliminar un producto de la cesta**
 const eliminarProductoDeCesta = async (req, res) => {
   try {
     const { usuarioId, cestaId, productoId } = req.params;
@@ -77,6 +90,7 @@ const eliminarProductoDeCesta = async (req, res) => {
     let cesta = await CestaVenta.findOne({
       where: { usuarioId, cestaId, estado: "pendiente" },
     });
+
     if (!cesta) {
       return res
         .status(404)
@@ -84,11 +98,12 @@ const eliminarProductoDeCesta = async (req, res) => {
     }
 
     // Filtrar productos sin el que se quiere eliminar
-    const productosActualizados = cesta.productos.filter(
+    let productosActualizados = JSON.parse(cesta.productos).filter(
       (p) => p.productoId !== parseInt(productoId)
     );
+
     await CestaVenta.update(
-      { productos: productosActualizados },
+      { productos: JSON.stringify(productosActualizados) },
       { where: { usuarioId, cestaId } }
     );
 
@@ -103,7 +118,7 @@ const eliminarProductoDeCesta = async (req, res) => {
   }
 };
 
-// Cancelar una cesta
+// 🔄 **Cancelar una cesta**
 const cancelarCesta = async (req, res) => {
   try {
     const { usuarioId, cestaId } = req.params;
@@ -111,6 +126,7 @@ const cancelarCesta = async (req, res) => {
     const cestaExistente = await CestaVenta.findOne({
       where: { usuarioId, cestaId, estado: "pendiente" },
     });
+
     if (!cestaExistente) {
       return res
         .status(404)
@@ -129,7 +145,7 @@ const cancelarCesta = async (req, res) => {
   }
 };
 
-// Eliminar completamente una cesta
+// 🔄 **Eliminar completamente una cesta**
 const eliminarCesta = async (req, res) => {
   try {
     const { usuarioId, cestaId } = req.params;
@@ -137,6 +153,7 @@ const eliminarCesta = async (req, res) => {
     const cestaExistente = await CestaVenta.findOne({
       where: { usuarioId, cestaId },
     });
+
     if (!cestaExistente) {
       return res.status(404).json({ error: "La cesta no existe." });
     }
